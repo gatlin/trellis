@@ -2,8 +2,6 @@
 
 (c) 1988 &mdash; Gatlin Cheyenne Johnson <gatlin@niltag.net>
 
-![trellis demo](docs/demo.gif)
-
 # What?
 
 A console-based spreadsheet application written in Haskell.
