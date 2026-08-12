@@ -1,0 +1,3 @@
+[submodule "termbox2-hs"]
+	path = termbox2-hs
+	url = https://github.com/gatlin/termbox2-hs

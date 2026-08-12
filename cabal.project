@@ -1,0 +1,2 @@
+ignore-project: False
+packages: ./trellis.cabal, ./termbox2-hs/termbox2-hs.cabal
