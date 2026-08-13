@@ -1,7 +1,15 @@
 module FormulaSpec (tests) where
 
 import qualified Data.Map.Strict as Map
-import Formula (Expr, Value (..), compile, evaluated, renderExpr)
+import Formula (
+  Expr (..),
+  ExprF (..),
+  Value (..),
+  adjustRefs,
+  compile,
+  evaluated,
+  renderExpr,
+ )
 import Parser (parseExpr)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, testCase, (@?=))
@@ -33,6 +41,8 @@ tests =
     , ifTests
     , blankTests
     , parseFailureTests
+    , rangeTests
+    , adjustRefsTests
     , roundTripTests
     ]
 
@@ -109,6 +119,61 @@ parseFailureTests =
           Right e -> assertBool ("expected a parse failure, got " ++ show e) False
     ]
 
+numAt :: (Int, Int) -> Double -> ((Int, Int), Expr)
+numAt pos n = (pos, Expr (NumLitF n))
+
+strAt :: (Int, Int) -> String -> ((Int, Int), Expr)
+strAt pos s = (pos, Expr (StrLitF s))
+
+rangeTests :: TestTree
+rangeTests =
+  testGroup
+    "ranges"
+    [ testCase "SUM over a rectangle" $
+        evalFormula grid "SUM(@0,0:1,1)" @?= VNum 10
+    , testCase "AVERAGE over a rectangle" $
+        evalFormula grid "AVERAGE(@0,0:1,1)" @?= VNum 2.5
+    , testCase "COUNT counts numeric cells" $
+        evalFormula grid "COUNT(@0,0:1,1)" @?= VNum 4
+    , testCase "MIN over a rectangle" $
+        evalFormula grid "MIN(@0,0:1,1)" @?= VNum 1
+    , testCase "MAX over a rectangle" $
+        evalFormula grid "MAX(@0,0:1,1)" @?= VNum 4
+    , testCase "a bare ref is its own 1x1 range" $
+        evalFormula grid "SUM(@0,0)" @?= VNum 1
+    , testCase "corners can be given in either order" $
+        evalFormula grid "SUM(@1,1:0,0)" @?= VNum 10
+    , testCase "SUM of an all-blank range is 0" $
+        evalFormula grid "SUM(@9,9:10,10)" @?= VNum 0
+    , testCase "COUNT of an all-blank range is 0" $
+        evalFormula grid "COUNT(@9,9:10,10)" @?= VNum 0
+    , testCase "AVERAGE of an empty range is an error" $
+        assertBool "expected a VErr" (isErr (evalFormula grid "AVERAGE(@9,9:10,10)"))
+    , testCase "MIN of an empty range is an error" $
+        assertBool "expected a VErr" (isErr (evalFormula grid "MIN(@9,9:10,10)"))
+    , testCase "a non-numeric cell in the range is a strict error" $
+        assertBool "expected a VErr" (isErr (evalFormula mixedGrid "SUM(@0,0:1,1)"))
+    , testCase "a bare ref parses the same as its own explicit self-range" $
+        parseExpr "SUM(@2,3)" @?= parseExpr "SUM(@2,3:2,3)"
+    ]
+ where
+  grid = Map.fromList [numAt (0, 0) 1, numAt (1, 0) 2, numAt (0, 1) 3, numAt (1, 1) 4]
+  mixedGrid = Map.fromList [numAt (0, 0) 1, strAt (1, 0) "x", numAt (0, 1) 3, numAt (1, 1) 4]
+
+adjustRefsTests :: TestTree
+adjustRefsTests =
+  testGroup
+    "adjustRefs"
+    [ testCase "shifts a plain ref" $
+        fmap (adjustRefs (1, 1)) (parseExpr "@2,3") @?= parseExpr "@3,4"
+    , testCase "shifts both corners of a range" $
+        fmap (adjustRefs (2, 3)) (parseExpr "SUM(@0,0:1,1)") @?= parseExpr "SUM(@2,3:3,4)"
+    , testCase "leaves a literal untouched" $
+        fmap (adjustRefs (5, 5)) (parseExpr "42") @?= parseExpr "42"
+    , testCase "recurses through arithmetic" $
+        fmap (adjustRefs (1, 0)) (parseExpr "@0,0+@1,1") @?= parseExpr "@1,0+@2,1"
+    ]
+
 {- | Re-committing a formula unchanged must not silently change what it
 means - the whole reason 'renderExpr' has to track operator precedence
 rather than parenthesizing everything or nothing.
@@ -127,6 +192,11 @@ roundTripTests =
     , "NUM(\"5\")"
     , "-5"
     , "@1,2+@3,4"
+    , "SUM(@0,0:3,2)"
+    , "AVERAGE(@0,0:3,2)"
+    , "COUNT(@0,0:3,2)"
+    , "MIN(@0,0:3,2)"
+    , "MAX(@0,0:3,2)"
     ]
   roundTrips src = case parseExpr src of
     Left err -> assertBool ("failed to parse " ++ src ++ ": " ++ err) False

@@ -16,21 +16,27 @@ ref      ::= '\@' int ',' int
 call     ::= 'IF' '(' expr ',' expr ',' expr ')'
            | 'AND' '(' expr ',' expr ')' | 'OR' '(' expr ',' expr ')'
            | 'NOT' '(' expr ')' | 'STR' '(' expr ')' | 'NUM' '(' expr ')'
+           | agg '(' range ')'
+agg      ::= 'SUM' | 'AVERAGE' | 'COUNT' | 'MIN' | 'MAX'
+range    ::= '\@' int ',' int (':' int ',' int)?
 @
 
 A cell reference is written as an absolute coordinate, e.g. @\@2,3@ means
 "cell (2,3)", regardless of which cell the formula itself lives in.
-Comparisons don't chain (@1<2<3@ isn't valid syntax). [^1] [^2]
+Comparisons don't chain (@1<2<3@ isn't valid syntax). A range is only
+ever valid as an aggregate function's own argument, never a general
+expression - @SUM(\@0,0:3,2)@ parses, @\@0,0:3,2 + 1@ doesn't. [^1] [^2]
 -}
 module Parser (parseExpr) where
 
 import Control.Applicative ((<|>))
 import Data.Attoparsec.Text
 import qualified Data.Text as T
-import Formula (CompareOp (..), Expr (..), ExprF (..), Op (..))
+import Formula (AggOp (..), CompareOp (..), Expr (..), ExprF (..), Op (..))
 
 parseExpr :: String -> Either String Expr
-parseExpr = parseOnly (skipSpace *> compareP <* skipSpace <* endOfInput) . T.pack
+parseExpr =
+  parseOnly (skipSpace *> compareP <* skipSpace <* endOfInput) . T.pack
 
 compareP :: Parser Expr
 compareP = do
@@ -106,21 +112,44 @@ negP = char '-' *> skipSpace *> (asNegative <$> factorP)
   asNegative (Expr (NumLitF n)) = Expr (NumLitF (negate n))
   asNegative e = Expr (ArithF Sub (Expr (NumLitF 0)) e)
 
-refP :: Parser Expr
-refP = do
-  _ <- char '@'
+-- | The @x, y@ pair inside a '@x,y' reference, shared with 'rangeP'.
+coordP :: Parser (Int, Int)
+coordP = do
   x <- signed decimal
   skipSpace
   _ <- char ','
   skipSpace
   y <- signed decimal
+  pure (x, y)
+
+refP :: Parser Expr
+refP = do
+  _ <- char '@'
+  (x, y) <- coordP
   pure (Expr (RefF (x, y)))
+
+{- | An aggregate function's argument: a bare '\@x,y' (its own 1x1
+range) or an explicit '\@x,y:x2,y2' rectangle, corners in either order.
+-}
+rangeP :: Parser ((Int, Int), (Int, Int))
+rangeP = do
+  _ <- char '@'
+  start <- coordP
+  end <- endP <|> pure start
+  pure (start, end)
+ where
+  endP = do
+    skipSpace
+    _ <- char ':'
+    skipSpace
+    coordP
 
 parensP :: Parser Expr
 parensP = char '(' *> skipSpace *> compareP <* skipSpace <* char ')'
 
 callP :: Parser Expr
-callP = choice [ifP, andP, orP, notP, strP, numP]
+callP =
+  choice [ifP, andP, orP, notP, strP, numP, sumP, avgP, countP, minP, maxP]
 
 ifP :: Parser Expr
 ifP = do
@@ -139,6 +168,25 @@ notP, strP, numP :: Parser Expr
 notP = mk1 "NOT" (Expr . NotF)
 strP = mk1 "STR" (Expr . ToStringF)
 numP = mk1 "NUM" (Expr . ToNumberF)
+
+sumP, avgP, countP, minP, maxP :: Parser Expr
+sumP = aggCallP "SUM" SumOp
+avgP = aggCallP "AVERAGE" AvgOp
+countP = aggCallP "COUNT" CountOp
+minP = aggCallP "MIN" MinOp
+maxP = aggCallP "MAX" MaxOp
+
+-- | An aggregate-function call: @NAME(range)@, fixed single-range arity.
+aggCallP :: T.Text -> AggOp -> Parser Expr
+aggCallP name op = do
+  _ <- string name
+  skipSpace
+  _ <- char '('
+  skipSpace
+  (start, end) <- rangeP
+  skipSpace
+  _ <- char ')'
+  pure (Expr (RangeF op start end))
 
 -- | A one-argument built-in: @NAME(expr)@.
 mk1 :: T.Text -> (Expr -> Expr) -> Parser Expr

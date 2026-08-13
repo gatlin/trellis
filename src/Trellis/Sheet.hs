@@ -572,7 +572,7 @@ instance (ComonadApply (Nested ts), Indexable ts) => Comonad (Indexed ts) where
     Indexed (origin it) $
       Indexed
         <$> indices (origin it)
-          <@> duplicate (unindexed it)
+        <@> duplicate (unindexed it)
 
 instance
   (ComonadApply (Nested ts), Indexable ts) =>
@@ -587,12 +587,14 @@ indices ::
 indices = cross . fmap enumerate
 
 {- | Take all the items between the current 'focus' and the item specified by
-the 'Relative' 'Ref'erence and return them as a list '[a]'.
+the 'Relative' 'Ref'erence and return them as a list '[a]'. A zero offset
+means "just the focus" - '[focus t]', not '[]' - matching @r > 0@\/@r < 0@'s
+own shape of always starting from 'focus'.
 -}
 tapeTake :: Ref 'Relative -> Tape a -> [a]
 tapeTake (Rel r) t | r > 0 = focus t : takeStream r (viewR t)
 tapeTake (Rel r) t | r < 0 = focus t : takeStream (abs r) (viewL t)
-tapeTake _ _ = []
+tapeTake _ t = [focus t]
 
 class Take r t where
   type ListFrom t a

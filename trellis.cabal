@@ -58,13 +58,25 @@ executable trellis
     main-is:          Main.hs
     hs-source-dirs:   app
     default-language: Haskell2010
-    ghc-options:      -rtsopts -optl-Wl,--gc-sections
+    ghc-options:      -rtsopts
+
+    -- --gc-sections is a GNU-linker flag; Apple's linker rejects it
+    -- outright and fails the whole link, so Darwin gets its own
+    -- dead-code-stripping flag instead. [^3]
+    if os(osx)
+        ghc-options: -optl-Wl,-dead_strip
+    else
+        ghc-options: -optl-Wl,--gc-sections
 
     -- SheetState/Render/Update/Formula/Parser/Keymap/Live/Cli are the
     -- spreadsheet app itself, built on the library's reusable machinery
     -- but not reusable machinery themselves - so unlike src/Trellis, they
     -- live here.
-    other-modules:    SheetState, Render, Update, Formula, Parser, Keymap, Live, Cli
+    other-modules:    SheetState, SheetState.Geometry, SheetState.Fill,
+                      Render, Render.Theme, Render.Editor, Render.Grid,
+                      Update, Update.Events, Update.Buffer, Update.Navigation,
+                      Update.Subscriptions, Update.Fill, Update.Core,
+                      Formula, Parser, Keymap, Live, Live.In, Live.Out, Cli
 
     build-depends:    base,
                       adjunctions,
@@ -91,7 +103,10 @@ test-suite trellis-test
     -- source-dir path. [^2]
     hs-source-dirs:   test, app
     other-modules:    SheetStateSpec, FormulaSpec, UpdateSpec, LiveSpec, CliSpec,
-                      SheetState, Formula, Parser, Update, Keymap, Live, Cli
+                      SheetState, SheetState.Geometry, SheetState.Fill,
+                      Formula, Parser, Keymap, Live, Live.In, Live.Out, Cli,
+                      Update, Update.Events, Update.Buffer, Update.Navigation,
+                      Update.Subscriptions, Update.Fill, Update.Core
 
     build-depends:    base,
                       adjunctions,
@@ -128,3 +143,9 @@ test-suite trellis-test
 -- without either moving them back into the library or adding a third
 -- internal-library component just to share code between two
 -- components - overkill for a project this size.
+
+-- [^3]:
+-- Fixes a real "gcc failed in phase Linker" build failure on macOS
+-- (GHC 9.12.2 via ghcup) caused by --gc-sections, a GNU-only flag.
+-- -dead_strip is the Darwin linker's equivalent; confirmed working on
+-- real macOS hardware.

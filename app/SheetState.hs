@@ -1,18 +1,21 @@
 {- |
 Module: SheetState
-Description: The spreadsheet's state, and the geometry both rendering and
-event handling read to lay it out.
+Description: The spreadsheet's state - see "SheetState.Geometry" for the
+screen-layout math derived from it.
 -}
 module SheetState (
   SheetState (..),
   EditorState (..),
   LiveBinding (..),
+  FillSource (..),
+  classifySelection,
+  previewRect,
   initialState,
+  doubleClickWindow,
   gutterWidth,
   defaultCellWidth,
   minCellWidth,
   maxCellWidth,
-  doubleClickWindow,
   headerHeight,
   rowStride,
   statusBarHeight,
@@ -28,27 +31,26 @@ module SheetState (
 import qualified Data.Map.Strict as Map
 import Data.Time.Clock (NominalDiffTime, UTCTime)
 import Formula (Expr)
+import SheetState.Fill (FillSource (..), classifySelection, previewRect)
+import SheetState.Geometry (
+  cellAt,
+  clampAxis,
+  clampOrigin,
+  clampRange,
+  colBoundaries,
+  defaultCellWidth,
+  gutterWidth,
+  headerHeight,
+  initialCellWidth,
+  maxCellWidth,
+  minCellWidth,
+  rowStride,
+  statusBarHeight,
+  visibleCols,
+  visibleRows,
+ )
 import qualified Trellis.Orc as Orc
 import qualified Trellis.UI as UI
-
-gutterWidth :: Int
-gutterWidth = 5
-
-{- | Not fixed - the mouse wheel zooms 'cellWidth' live (see 'Update.zoomBy'),
-bounded so a cell never gets unreadably narrow or wide enough to stop
-looking like a grid.
--}
-defaultCellWidth, minCellWidth, maxCellWidth :: Int
-defaultCellWidth = 8
-minCellWidth = 4
-maxCellWidth = 28
-
-{- | What the sheet opens at: a few scroll-wheel clicks in from
-'defaultCellWidth', which itself stays the true unzoomed reference point
-'rowStride' needs.
--}
-initialCellWidth :: Int
-initialCellWidth = defaultCellWidth + 3
 
 data SheetState = SheetState
   { cursor :: (Int, Int)
@@ -61,8 +63,8 @@ data SheetState = SheetState
   , cells :: Map.Map (Int, Int) Expr
   , editor :: Maybe EditorState
   {- ^ A formula editor open over the sheet, or 'Nothing' when just
-  navigating. Closing it - via 'Update.runEditor' - resumes whatever code
-  was waiting on its result, through 'editorResume'.
+  navigating. Closing it - via 'Update.Core.runEditor' - resumes whatever
+  code was waiting on its result, through 'editorResume'.
   -}
   , lastClick :: Maybe ((Int, Int), UTCTime)
   {- ^ Where and when the most recent fresh left-button press landed, to
@@ -84,6 +86,20 @@ data SheetState = SheetState
   for 'Render.hs' to know which cells to color; the live handles
   ('Live.OutBinding') are threaded through 'Update.update' separately.
   -}
+  , selection :: Maybe ((Int, Int), (Int, Int))
+  {- ^ The rectangle a 'selectButton' drag last covered, anchor and
+  endpoint - unlike 'panAnchor'\/'fillDrag', not cleared on release: it
+  needs to survive until a later, separate fillButton drag reads it
+  (see 'SheetState.Fill.classifySelection'). Cleared by @cancel@
+  instead.
+  -}
+  , fillDrag :: Maybe (FillSource, (Int, Int))
+  {- ^ An in-progress fill drag: what's being replicated (captured once
+  at press time via 'classifySelection') and the cell the drag is
+  currently over (updates live). 'Nothing' before a fill starts and
+  right after release, so the next press always starts a fresh one -
+  see 'Update.Fill.fillDragTo'.
+  -}
   }
 
 {- | A cell bound to a live\/async source: the 'Trellis.Orc' subscription
@@ -97,16 +113,18 @@ data LiveBinding = LiveBinding
 
 {- | A formula editor's live state: the text typed so far, and what to do
 once it closes. 'editorResume' is a 'Trellis.CPS.shift'-captured
-continuation (see 'Update.runEditor') stored as an ordinary function value.
+continuation (see 'Update.Core.runEditor') stored as an ordinary function value.
 -}
 data EditorState = EditorState
   { editorBuffer :: String
   , editorCursor :: Int
-  -- ^ Character offset into 'editorBuffer'; @0 <= editorCursor <= length editorBuffer@.
+  {- ^ Character offset into 'editorBuffer'; @0 <= editorCursor <= length
+  editorBuffer@.
+  -}
   , editorResume :: Maybe String -> UI.Action (UI.Store SheetState) IO ()
   {- ^ 'Nothing' on cancel; 'Just text' on commit, where 'text' is either
   empty (clear the cell), a valid formula, or a valid live spec -
-  'Update.editing' only closes the modal once one of those is true.
+  'Update.Core.editing' only closes the modal once one of those is true.
   -}
   }
 
@@ -122,74 +140,9 @@ initialState =
     Nothing
     Map.empty
     Map.empty
+    Nothing
+    Nothing
 
 -- | How close together two clicks on the same cell must be to count as one.
 doubleClickWindow :: NominalDiffTime
 doubleClickWindow = 0.4
-
-visibleCols :: Int -> Int -> Int
-visibleCols cw w = max 1 ((w - gutterWidth) `div` cw)
-
--- | The column-header text row.
-headerHeight :: Int
-headerHeight = 1
-
-{- | Screen rows each visible sheet row occupies: a ruled line above, one
-row of content, plus extra padding from zooming (see 'cellWidth'). [^1]
--}
-rowStride :: Int -> Int
-rowStride cw = max 2 (2 + (cw - defaultCellWidth) `div` 4)
-
--- | The row 'Trellis.UI.statusText' occupies at the bottom of the terminal.
-statusBarHeight :: Int
-statusBarHeight = 1
-
-visibleRows :: Int -> Int -> Int
-visibleRows cw h = max 1 ((h - headerHeight - statusBarHeight - 1) `div` rowStride cw)
-
-{- | Screen x position of each column boundary: one before the first cell,
-one after every cell thereafter - @cols + 1@ positions in all.
--}
-colBoundaries :: Int -> Int -> [Int]
-colBoundaries cw cols = [gutterWidth - 1 + i * cw | i <- [0 .. cols]]
-
-{- | Shift a stored viewport origin by the minimum amount needed to keep a
-new cursor position in view, on one axis - scroll only when the cursor
-would walk off the edge, otherwise leave it where it was.
--}
-clampAxis :: Int -> Int -> Int -> Int
-clampAxis visible c o
-  | c < o = c
-  | c > o + visible - 1 = c - visible + 1
-  | otherwise = o
-
--- | 'clampAxis', applied to both axes of a viewport origin at once.
-clampOrigin :: Int -> (Int, Int) -> (Int, Int) -> (Int, Int) -> (Int, Int)
-clampOrigin cw (cx, cy) (w, h) (ox, oy) =
-  (clampAxis (visibleCols cw w) cx ox, clampAxis (visibleRows cw h) cy oy)
-
-{- | Which sheet cell, if any, sits under a screen position, using the
-viewport origin 'Render.render' laid the grid out with. 'Nothing' means
-the header row or gutter.
--}
-cellAt :: Int -> (Int, Int) -> Int -> Int -> Maybe (Int, Int)
-cellAt cw (ox, oy) x y
-  | y < headerHeight = Nothing
-  | (y - headerHeight) `mod` rowStride cw == 0 = Nothing -- on a ruled line
-  | x < gutterWidth = Nothing
-  | otherwise =
-      Just
-        ( ox + (x - gutterWidth) `div` cw
-        , oy + (y - headerHeight) `div` rowStride cw
-        )
-
--- | Clamp an 'Int' into an inclusive range - used for zoom's 'cellWidth' step.
-clampRange :: Int -> Int -> Int -> Int
-clampRange lo hi x = max lo (min hi x)
-
-{- [^1]:
-Every row gets a line both above and below (the one below shared with the
-next row's line above, except the last row's, which closes the bottom of
-the grid) - so even at the minimum stride of 2, half the terminal's height
-goes to ruling rather than data.
--}

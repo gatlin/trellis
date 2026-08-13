@@ -14,6 +14,7 @@ module Formula (
   ExprF (..),
   Op (..),
   CompareOp (..),
+  AggOp (..),
   Value (..),
   Coord,
   blank,
@@ -24,6 +25,7 @@ module Formula (
   window,
   renderExpr,
   showValue,
+  adjustRefs,
 ) where
 
 import Data.Char (isSpace)
@@ -53,6 +55,10 @@ data Op = Add | Sub | Mul | Div
 data CompareOp = CEq | CNeq | CLt | CLte | CGt | CGte
   deriving (Eq, Show)
 
+-- | An aggregate function applied to a range - see 'ExprF's 'RangeF'.
+data AggOp = SumOp | AvgOp | CountOp | MinOp | MaxOp
+  deriving (Eq, Show)
+
 {- | 'Expr's pattern functor: every recursive position replaced by a type
 variable, so 'Functor'\/'Foldable'\/'Traversable' derive for free. [^2]
 -}
@@ -62,6 +68,12 @@ data ExprF a
   | StrLitF String
   | BoolLitF Bool
   | RefF (Int, Int)
+  | {- | An aggregate function over a rectangle of cells, given by two
+    absolute corners in either order - e.g. @SUM(\@0,0:3,2)@. Only ever
+    produced by a dedicated aggregate-function grammar rule (see
+    "Parser"), never a general expression position.
+    -}
+    RangeF AggOp (Int, Int) (Int, Int)
   | ArithF Op a a
   | ConcatF a a
   | CompareF CompareOp a a
@@ -229,6 +241,48 @@ formatNum n
 
 -- Compiling and evaluating --------------------------------------------------
 
+{- | Folds the values a range covers: 'VBlank' is skipped (identity, same
+treatment blanks get everywhere else here), a 'VErr' anywhere propagates,
+and anything else non-numeric is a strict error rather than a silent
+skip - same no-implicit-coercion stance 'numeric' already takes. 'SUM'\/
+'COUNT' are well-defined over an all-blank range (0); 'AVERAGE'\/'MIN'\/
+'MAX' of one are undefined, so they error instead of guessing.
+-}
+aggregate :: AggOp -> [Value] -> Value
+aggregate op vals = case traverse asNumbers vals of
+  Left e -> VErr e
+  Right nss -> reduceAgg op (concat nss)
+ where
+  asNumbers VBlank = Right []
+  asNumbers (VNum n) = Right [n]
+  asNumbers (VErr e) = Left e
+  asNumbers (VStr _) = Left "expected a number, got text (try NUM(...))"
+  asNumbers (VBool _) = Left "expected a number, got a boolean"
+
+reduceAgg :: AggOp -> [Double] -> Value
+reduceAgg SumOp ns = VNum (sum ns)
+reduceAgg CountOp ns = VNum (fromIntegral (length ns))
+reduceAgg AvgOp [] = VErr "AVERAGE of an empty range"
+reduceAgg AvgOp ns = VNum (sum ns / fromIntegral (length ns))
+reduceAgg MinOp [] = VErr "MIN of an empty range"
+reduceAgg MinOp ns = VNum (minimum ns)
+reduceAgg MaxOp [] = VErr "MAX of an empty range"
+reduceAgg MaxOp ns = VNum (maximum ns)
+
+{- | Shifts every 'RefF'\/'RangeF' inside an 'Expr' by a relative offset,
+leaving everything else untouched - what the fill-drag gesture uses to
+replicate a formula "with adjustments" rather than verbatim, reusing
+'ExprF's derived 'Functor' instance to recurse through every other
+constructor for free.
+-}
+adjustRefs :: (Int, Int) -> Expr -> Expr
+adjustRefs (dx, dy) = shift
+ where
+  shift (Expr (RefF (x, y))) = Expr (RefF (x + dx, y + dy))
+  shift (Expr (RangeF op (x0, y0) (x1, y1))) =
+    Expr (RangeF op (x0 + dx, y0 + dy) (x1 + dx, y1 + dy))
+  shift (Expr e) = Expr (fmap shift e)
+
 {- | Turn a cell's source into the rule its value is derived from, given the
 absolute position it's compiled for. [^4]
 -}
@@ -239,6 +293,17 @@ compile _ (Expr (StrLitF s)) = const (VStr s)
 compile _ (Expr (BoolLitF b)) = const (VBool b)
 compile (hx, hy) (Expr (RefF (tx, ty))) =
   cell (d2 (rightBy (tx - hx) & belowBy (ty - hy)))
+compile (hx, hy) (Expr (RangeF op (x0, y0) (x1, y1))) =
+  \sh ->
+    let (minX, minY) = (min x0 x1, min y0 y1)
+        cols = abs (x1 - x0) + 1
+        rows = abs (y1 - y0) + 1
+        vals =
+          concat $
+            Trellis.Sheet.take
+              (rightBy (cols - 1) & belowBy (rows - 1))
+              (go (rightBy (minX - hx) & belowBy (minY - hy)) sh)
+     in aggregate op vals
 compile here (Expr (ArithF op a b)) =
   \sh -> arith op (compile here a sh) (compile here b sh)
 compile here (Expr (ConcatF a b)) =
@@ -265,7 +330,9 @@ evaluated :: Map.Map (Int, Int) Expr -> Sheet2 Value
 evaluated cellMap =
   evaluate $
     tabulate
-      (\crd -> let p = toPair crd in compile p (Map.findWithDefault blank p cellMap))
+      ( \crd ->
+          let p = toPair crd in compile p (Map.findWithDefault blank p cellMap)
+      )
 
 {- | The inverse of "Parser"'s grammar: turns an 'Expr' back into the text
 that produces it, for pre-filling an edit buffer. Parenthesizes by each
@@ -279,7 +346,19 @@ renderExpr = render 0
   render _ (Expr (StrLitF s)) = quote s
   render _ (Expr (BoolLitF b)) = if b then "TRUE" else "FALSE"
   render _ (Expr (RefF (x, y))) = "@" ++ show x ++ "," ++ show y
-  render minPrec (Expr (ArithF op a b)) = chain minPrec (arithPrec op) (arithSym op) a b
+  render _ (Expr (RangeF op (x0, y0) (x1, y1))) =
+    aggName op
+      ++ "(@"
+      ++ show x0
+      ++ ","
+      ++ show y0
+      ++ ":"
+      ++ show x1
+      ++ ","
+      ++ show y1
+      ++ ")"
+  render minPrec (Expr (ArithF op a b)) =
+    chain minPrec (arithPrec op) (arithSym op) a b
   render minPrec (Expr (ConcatF a b)) = chain minPrec additivePrec "&" a b
   render minPrec (Expr (CompareF op a b)) =
     wrap
@@ -318,6 +397,12 @@ renderExpr = render 0
   compareSym CGt = ">"
   compareSym CGte = ">="
 
+  aggName SumOp = "SUM"
+  aggName AvgOp = "AVERAGE"
+  aggName CountOp = "COUNT"
+  aggName MinOp = "MIN"
+  aggName MaxOp = "MAX"
+
   quote s = "\"" ++ concatMap escape s ++ "\""
   escape '"' = "\\\""
   escape c = [c]
@@ -328,7 +413,9 @@ columns.
 -}
 window :: (Int, Int) -> Int -> Int -> Sheet2 Value -> [[Value]]
 window (x, y) cols rows sh =
-  Trellis.Sheet.take (rightBy cols & belowBy rows) (go (rightBy x & belowBy y) sh)
+  Trellis.Sheet.take
+    (rightBy cols & belowBy rows)
+    (go (rightBy x & belowBy y) sh)
 
 -- | How a 'Value' actually displays, in a cell or published out to a pipe.
 showValue :: Value -> String

@@ -80,6 +80,10 @@ data KeyMap = KeyMap
   -- ^ Which mouse gesture selects\/drags a cell.
   , panButton :: MouseBinding
   -- ^ Which mouse gesture, held and dragged, pans instead of moving the cursor.
+  , fillButton :: MouseBinding
+  {- ^ Which mouse gesture, held and dragged, fills the dragged range with
+  the source cell's formula, references adjusted to match.
+  -}
   , confirm :: Binding
   -- ^ Starts an edit when navigating; commits it when editing.
   , cancel :: Binding
@@ -89,8 +93,9 @@ data KeyMap = KeyMap
   }
 
 {- | Arrows navigate, the wheel zooms, left-click selects\/drags,
-middle-click-drag pans, Enter starts\/commits an edit, Escape cancels, Delete
-clears a cell. Kept in sync with 'defaultConfigText' by hand.
+middle-click-drag pans, right-click-drag fills a range with the source
+cell's formula (adjusted), Enter starts\/commits an edit, Escape cancels,
+Delete clears a cell. Kept in sync with 'defaultConfigText' by hand.
 -}
 defaultKeyMap :: KeyMap
 defaultKeyMap =
@@ -103,6 +108,7 @@ defaultKeyMap =
     , scrollDown = MouseBinding Tb2.keyMouseWheelDown False
     , selectButton = MouseBinding Tb2.keyMouseLeft False
     , panButton = MouseBinding Tb2.keyMouseMiddle False
+    , fillButton = MouseBinding Tb2.keyMouseRight False
     , confirm = Plain (Key Tb2.keyCtrlEnter)
     , cancel = Plain (Key Tb2.keyCtrlEsc)
     , clearCell = Plain (Key Tb2.keyDelete)
@@ -131,7 +137,9 @@ namedKeys =
   , ("PageDown", Tb2.keyPgDn)
   ]
 
--- | Maps a config setting name to the 'KeyMap' field it updates (full 'Binding' fields only).
+{- | Maps a config setting name to the 'KeyMap' field it updates (full
+'Binding' fields only).
+-}
 bindingSetters :: [(String, Binding -> KeyMap -> KeyMap)]
 bindingSetters =
   [ ("moveUp", \k m -> m{moveUp = k})
@@ -150,6 +158,7 @@ mouseKeySetters =
   , ("scrollDown", \k m -> m{scrollDown = k})
   , ("selectButton", \k m -> m{selectButton = k})
   , ("panButton", \k m -> m{panButton = k})
+  , ("fillButton", \k m -> m{fillButton = k})
   ]
 
 {- | A name from 'namedKeys', or - since letters have no named key - a
@@ -214,13 +223,15 @@ defaultConfigText =
     , "# Delete, Tab, Space, Home, End, PageUp, PageDown."
     , "#"
     , "# scrollUp/scrollDown zoom the grid in and out. selectButton,"
-    , "# panButton: mouse-only settings may additionally be prefixed with"
-    , "# Ctrl+ (e.g. Ctrl+MouseLeft), unlike a named key that can't - a"
-    , "# mouse button and Ctrl always arrive together in one event, so"
-    , "# there's no ambiguity to worry about the way there is with Alt and"
-    , "# a keyboard Escape. selectButton drags to move the cursor;"
-    , "# panButton, held and dragged, pans the viewport instead. Give them"
-    , "# different gestures or one will always win over the other."
+    , "# panButton, fillButton: mouse-only settings may additionally be"
+    , "# prefixed with Ctrl+ (e.g. Ctrl+MouseLeft), unlike a named key that"
+    , "# can't - a mouse button and Ctrl always arrive together in one"
+    , "# event, so there's no ambiguity to worry about the way there is"
+    , "# with Alt and a keyboard Escape. selectButton drags to move the"
+    , "# cursor; panButton, held and dragged, pans the viewport instead;"
+    , "# fillButton, held and dragged, replicates the source cell's formula"
+    , "# across the dragged range, with references adjusted to match. Give"
+    , "# each a different gesture or one will always win over the others."
     , ""
     , "moveUp = ArrowUp"
     , "moveDown = ArrowDown"
@@ -230,6 +241,7 @@ defaultConfigText =
     , "scrollDown = WheelDown"
     , "selectButton = MouseLeft"
     , "panButton = MouseMiddle"
+    , "fillButton = MouseRight"
     , "confirm = Enter"
     , "cancel = Escape"
     , "clearCell = Delete"
@@ -269,14 +281,18 @@ loadKeyMap = do
             )
           pure km
         Just b -> pure (setter b km)
-        Nothing -> warn lineNo ("unknown key value " ++ show value) >> pure km
+        Nothing ->
+          warn lineNo ("unknown key value " ++ show value) >> pure km
       Nothing -> case lookup field mouseKeySetters of
         Just setter -> case parseMouseBinding value of
           Just b -> pure (setter b km)
-          Nothing -> warn lineNo ("unknown key value " ++ show value) >> pure km
+          Nothing ->
+            warn lineNo ("unknown key value " ++ show value) >> pure km
         Nothing -> warn lineNo ("unknown setting " ++ show field) >> pure km
   warn lineNo msg =
-    hPutStrLn stderr ("trellis: keybindings line " ++ show lineNo ++ ": " ++ msg)
+    hPutStrLn
+      stderr
+      ("trellis: keybindings line " ++ show lineNo ++ ": " ++ msg)
 
 {- [^1]:
 Alt only works combined with a named key - termbox2 recognises e.g.
