@@ -1,2 +1,7 @@
 ignore-project: False
 packages: ./trellis.cabal, ./termbox2-hs/termbox2-hs.cabal
+
+-- Strips the installed executable (cabal install / cabal build) on top of
+-- the split-sections/gc-sections dead-code elimination already set in
+-- trellis.cabal - together, the full recommended size-reduction default.
+executable-stripping: True

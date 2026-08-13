@@ -9,7 +9,7 @@ build-type:         Simple
 extra-doc-files:    CHANGELOG.md
 
 common warnings
-    ghc-options: -Wall -Wunused-top-binds
+    ghc-options: -Wall -Wunused-top-binds -split-sections
 
 library
     import:           warnings
@@ -18,7 +18,9 @@ library
 
     -- Peano/Lists/Nested/Sheet and CPS/Tubes/UI are vendored verbatim from
     -- an earlier project. Day is pulled from garden's Weeds.hs scratch
-    -- pile, unused for now but useful later. [^1]
+    -- pile, unused for now but useful later. HIO/Orc are garden's
+    -- orchestration EDSL, letting a cell come from or publish to a live
+    -- source. [^1]
     exposed-modules:
         Trellis.UI,
         Trellis.Peano,
@@ -27,13 +29,21 @@ library
         Trellis.Sheet,
         Trellis.CPS,
         Trellis.Tubes,
-        Trellis.Day
+        Trellis.Day,
+        Trellis.HIO,
+        Trellis.Orc
+
+    -- Trellis.HIO's HasFork instance needs this to pick its mask-based
+    -- fork implementation over one using block/unblock, long removed
+    -- from base.
+    cpp-options:      -D__GHC_BLOCK_DEPRECATED__
 
     build-depends:    base,
                       adjunctions,
                       attoparsec,
                       comonad,
                       containers,
+                      deepseq,
                       distributive,
                       free,
                       monadIO,
@@ -48,12 +58,13 @@ executable trellis
     main-is:          Main.hs
     hs-source-dirs:   app
     default-language: Haskell2010
-    ghc-options:      -rtsopts
+    ghc-options:      -rtsopts -optl-Wl,--gc-sections
 
-    -- SheetState/Render/Update/Formula/Parser/Keymap are the spreadsheet
-    -- app itself, built on the library's reusable machinery but not
-    -- reusable machinery themselves - so unlike src/Trellis, they live here.
-    other-modules:    SheetState, Render, Update, Formula, Parser, Keymap
+    -- SheetState/Render/Update/Formula/Parser/Keymap/Live/Cli are the
+    -- spreadsheet app itself, built on the library's reusable machinery
+    -- but not reusable machinery themselves - so unlike src/Trellis, they
+    -- live here.
+    other-modules:    SheetState, Render, Update, Formula, Parser, Keymap, Live, Cli
 
     build-depends:    base,
                       adjunctions,
@@ -61,6 +72,8 @@ executable trellis
                       containers,
                       directory,
                       filepath,
+                      monadIO,
+                      process,
                       termbox2-hs,
                       text,
                       time,
@@ -73,11 +86,12 @@ test-suite trellis-test
     default-language: Haskell2010
 
     -- Reaches into app/ directly since SheetState/Formula/Parser/Update/
-    -- Keymap aren't exposed library modules. Named Spec.hs, not Main.hs, to
-    -- avoid colliding with app/Main.hs on this shared source-dir path. [^2]
+    -- Keymap/Live/Cli aren't exposed library modules. Named Spec.hs, not
+    -- Main.hs, to avoid colliding with app/Main.hs on this shared
+    -- source-dir path. [^2]
     hs-source-dirs:   test, app
-    other-modules:    SheetStateSpec, FormulaSpec, UpdateSpec,
-                      SheetState, Formula, Parser, Update, Keymap
+    other-modules:    SheetStateSpec, FormulaSpec, UpdateSpec, LiveSpec, CliSpec,
+                      SheetState, Formula, Parser, Update, Keymap, Live, Cli
 
     build-depends:    base,
                       adjunctions,
@@ -85,6 +99,8 @@ test-suite trellis-test
                       containers,
                       directory,
                       filepath,
+                      monadIO,
+                      process,
                       termbox2-hs,
                       text,
                       time,
@@ -100,12 +116,15 @@ test-suite trellis-test
 -- that project's terminal activity loop, vendored so Trellis can grow its
 -- own interactive front end the same way. Day is exactly the tool for
 -- composing differently-typed sibling widgets (e.g. a viewport plus an
--- edit buffer), once that's needed.
+-- edit buffer), once that's needed. HIO/Orc build on CPS to let a cell's
+-- value come from, or be published to, a cancellable background
+-- subscription instead of a pure formula, without touching Sheet's own
+-- evaluation.
 
 -- [^2]:
--- SheetState/Formula/Parser/Update/Keymap aren't exposed library modules
--- (see the executable stanza above), so this is the only way a separate
--- test-suite component can compile against them without either moving
--- them back into the library or adding a third internal-library
--- component just to share code between two components - overkill for a
--- project this size.
+-- SheetState/Formula/Parser/Update/Keymap/Live/Cli aren't exposed
+-- library modules (see the executable stanza above), so this is the
+-- only way a separate test-suite component can compile against them
+-- without either moving them back into the library or adding a third
+-- internal-library component just to share code between two
+-- components - overkill for a project this size.

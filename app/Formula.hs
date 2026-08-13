@@ -23,6 +23,7 @@ module Formula (
   evaluated,
   window,
   renderExpr,
+  showValue,
 ) where
 
 import Data.Char (isSpace)
@@ -328,6 +329,18 @@ columns.
 window :: (Int, Int) -> Int -> Int -> Sheet2 Value -> [[Value]]
 window (x, y) cols rows sh =
   Trellis.Sheet.take (rightBy cols & belowBy rows) (go (rightBy x & belowBy y) sh)
+
+-- | How a 'Value' actually displays, in a cell or published out to a pipe.
+showValue :: Value -> String
+showValue VBlank = ""
+showValue (VErr e) = e
+showValue (VStr s) = s
+showValue (VBool b) = if b then "TRUE" else "FALSE"
+showValue (VNum n)
+  | n == fromIntegral rounded = show rounded
+  | otherwise = show n
+ where
+  rounded = round n :: Integer
 
 {- [^1]:
 A cell reference can't be given a fixed type ahead of time - what's at

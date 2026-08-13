@@ -179,10 +179,20 @@ does not derive 'MonadIO' or export the constructor.
 newtype Screen a = Screen (Tb2.Termbox2 a)
   deriving (Functor, Applicative, Monad)
 
-{- | FIXME this newtype wrapper is purely due to laziness and a better Event
-type should be created so the tb2 abstraction does not leak.
+{- | Either a real termbox2 input event, or a periodic wakeup carrying none -
+the hook a component uses to notice state that changed off-screen (e.g. a
+'Trellis.Orc' subscription's result) without any input at all. [^5]
 -}
-newtype Event = Event Tb2.Tb2Event deriving (Show, Eq)
+data Event = InputEvent Tb2.Tb2Event | Tick
+  deriving (Show, Eq)
+
+{- | How often 'events' wakes the loop with a 'Tick' when no real input
+arrives. Fast enough that an off-screen update feels immediate; cheap
+enough to matter little at idle, since termbox2's own 'Tb2.present' only
+redraws cells that actually changed.
+-}
+tickIntervalMs :: Int
+tickIntervalMs = 250
 
 -- | A console view.
 data Console effect
@@ -195,7 +205,9 @@ data Console effect
 console :: (Event -> t) -> Screen () -> (t -> effect ()) -> Console effect
 console update render send = Console render (send . update)
 
--- | A 'Component' which handles
+{- | A 'Component' specialized to 'Action' as its action type and
+'Console' as its view - the concrete shape 'mount' runs.
+-}
 type Activity space effect =
   Component effect space (Action space) (Console effect)
 
@@ -208,20 +220,21 @@ activity u r = store (console u . r)
 
 events :: Generator Tb2.Termbox2 Event
 events = forever $ do
-  !event <- embed Tb2.pollEvent
+  !event <- embed (Tb2.peekEvent tickIntervalMs)
   case event of
-    Nothing -> return ()
-    Just !event' -> yield (Event event')
+    Nothing -> yield Tick
+    Just !event' -> yield (InputEvent event')
 
 {- | Ctrl+Q is a global escape hatch: it short-circuits here, before any
-'Activity's own 'update' logic, so no component can swallow it. [^2]
+'Activity's own 'update' logic, so no component can swallow it - a queued
+'Tick' never delays it. [^2]
 -}
 loopOrQuit :: Tube Tb2.Termbox2 Event Event
 loopOrQuit = forever $ do
-  Event event <- await
-  if Tb2._key event == Tb2.keyCtrlQ
-    then finish
-    else yield (Event event)
+  event <- await
+  case event of
+    InputEvent evt | Tb2._key evt == Tb2.keyCtrlQ -> finish
+    _ -> yield event
 
 {- | An implicit parameter's type must be monomorphic, so a rank-2 "run this
 effect down to IO" function has to be smuggled through one in a newtype.
@@ -490,4 +503,12 @@ the right; it lets each position bake in its own correctly-adjusted
 \*select* one of these already-built continuations - never inspect or
 amend the value one produces afterwards, per the CPS encoding 'Action'
 uses.
+-}
+
+{- [^5]:
+Used to wrap a bare 'Tb2.Tb2Event' with no other variants, with a FIXME
+noting the tb2 type shouldn't leak through like that. 'Tick' is the
+reason to finally generalize it - 'events' now polls with a timeout
+('Tb2.peekEvent') instead of blocking forever on 'Tb2.pollEvent', so a
+timeout needs some value of its own to become.
 -}

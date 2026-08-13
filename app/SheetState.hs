@@ -6,6 +6,7 @@ event handling read to lay it out.
 module SheetState (
   SheetState (..),
   EditorState (..),
+  LiveBinding (..),
   initialState,
   gutterWidth,
   defaultCellWidth,
@@ -27,6 +28,7 @@ module SheetState (
 import qualified Data.Map.Strict as Map
 import Data.Time.Clock (NominalDiffTime, UTCTime)
 import Formula (Expr)
+import qualified Trellis.Orc as Orc
 import qualified Trellis.UI as UI
 
 gutterWidth :: Int
@@ -72,6 +74,25 @@ data SheetState = SheetState
   viewport from. 'Nothing' before a pan starts and right after release,
   so the next press always starts a fresh anchor.
   -}
+  , subscriptions :: Map.Map (Int, Int) LiveBinding
+  {- ^ Cells fed by a live\/async 'Trellis.Orc' subscription instead of
+  an ordinary formula. See 'Live.declareSubscription'.
+  -}
+  , outBindings :: Map.Map (Int, Int) FilePath
+  {- ^ Cells published out to a pipe\/file whenever their value changes -
+  set once at startup from "--out" flags and read-only after that. Just
+  for 'Render.hs' to know which cells to color; the live handles
+  ('Live.OutBinding') are threaded through 'Update.update' separately.
+  -}
+  }
+
+{- | A cell bound to a live\/async source: the 'Trellis.Orc' subscription
+writing into it, and the raw spec text so re-opening the cell for edit
+shows what was typed, not the last value the subscription produced.
+-}
+data LiveBinding = LiveBinding
+  { liveGroup :: Orc.Group
+  , liveSpecText :: String
   }
 
 {- | A formula editor's live state: the text typed so far, and what to do
@@ -84,13 +105,23 @@ data EditorState = EditorState
   -- ^ Character offset into 'editorBuffer'; @0 <= editorCursor <= length editorBuffer@.
   , editorResume :: Maybe String -> UI.Action (UI.Store SheetState) IO ()
   {- ^ 'Nothing' on cancel; 'Just text' on commit, where 'text' is either
-  empty (clear the cell) or already known to parse - 'Update.editorUpdate'
-  only closes the modal once one of those is true.
+  empty (clear the cell), a valid formula, or a valid live spec -
+  'Update.editing' only closes the modal once one of those is true.
   -}
   }
 
 initialState :: SheetState
-initialState = SheetState (0, 0) (0, 0) initialCellWidth Map.empty Nothing Nothing Nothing
+initialState =
+  SheetState
+    (0, 0)
+    (0, 0)
+    initialCellWidth
+    Map.empty
+    Nothing
+    Nothing
+    Nothing
+    Map.empty
+    Map.empty
 
 -- | How close together two clicks on the same cell must be to count as one.
 doubleClickWindow :: NominalDiffTime

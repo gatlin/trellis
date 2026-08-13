@@ -227,8 +227,9 @@ f &&& g = \v -> (f v, g v)
 
 -- = Stream
 
--- | An inexhaustible source of @t@ values; unlike '[]' it can never be
--- empty or run out.
+{- | An inexhaustible source of @t@ values; unlike '[]' it can never be
+empty or run out.
+-}
 data Stream t = Cons t (Stream t)
 
 deriving instance (Show t) => Show (Stream t)
@@ -302,8 +303,9 @@ instance ComonadApply Stream where
 
 -- = Tape
 
--- | Two infinite 'Stream's of @a@ joined at a center 'focus', named for
--- Turing machine tape.
+{- | Two infinite 'Stream's of @a@ joined at a center 'focus', named for
+Turing machine tape.
+-}
 data Tape a = Tape
   { viewL :: Stream a
   , focus :: a
@@ -473,8 +475,9 @@ instance CombineRefLists (a :-: as) Nil where
 instance CombineRefLists Nil Nil where
   ConicNil & ConicNil = ConicNil
 
--- | Merge a list of relative references into a same-length list of
--- absolute references.
+{- | Merge a list of relative references into a same-length list of
+absolute references.
+-}
 merge ::
   (ReifyNatural n) =>
   Counted n (Ref 'Relative) ->
@@ -493,8 +496,9 @@ diff (Left (Rel r) ::: rs) (Abs _ ::: is) = Rel r ::: diff rs is
 diff (Right (Abs r) ::: rs) (Abs i ::: is) = Rel (r - i) ::: diff rs is
 diff CountedNil _ = CountedNil
 
--- | Forget a @Ref@'s type-level absolute/relative distinction, casting it
--- to 'Left' (relative) or 'Right' (absolute).
+{- | Forget a @Ref@'s type-level absolute/relative distinction, casting it
+to 'Left' (relative) or 'Right' (absolute).
+-}
 eitherFromRef :: Ref t -> Either (Ref 'Relative) (Ref 'Absolute)
 eitherFromRef (Rel r) = Left (Rel r)
 eitherFromRef (Abs a) = Right (Abs a)

@@ -9,9 +9,10 @@ module Render (
 
 import Control.Monad (forM_, when)
 import qualified Data.Map.Strict as Map
-import Formula (Value (..), blank, evaluated, renderExpr, window)
+import Formula (Value (..), blank, evaluated, renderExpr, showValue, window)
 import SheetState (
   EditorState (..),
+  LiveBinding,
   SheetState (..),
   colBoundaries,
   gutterWidth,
@@ -46,6 +47,18 @@ with it. 240 is a dark-mid grey: visible without shouting.
 gridFg, gridBg :: Tb2.Tb2ColorAttr
 gridFg = 240
 gridBg = Tb2.colorDefault
+
+-- | A cell fed by a live\/async 'Live.LiveSpec' subscription, when unfocused.
+liveFg, liveBg :: Tb2.Tb2ColorAttr
+liveFg = 51 -- bright cyan
+liveBg = Tb2.colorDefault
+
+{- | A cell published out to a pipe\/file ("--out"), when unfocused and
+not itself also a live subscription (which takes visual precedence).
+-}
+outFg, outBg :: Tb2.Tb2ColorAttr
+outFg = 201 -- bright magenta
+outBg = Tb2.colorDefault
 
 {- | The opposite of the grid's ruling: a dialog demanding attention, so
 drawn bright ('textFg's white) with a heavy line weight rather than a new
@@ -119,7 +132,7 @@ render st = do
       vals = window (ox, oy) cols rows (evaluated (cells st))
   renderColumnHeaders geo
   renderGridLines geo
-  renderCells geo vals
+  renderCells geo (subscriptions st) (outBindings st) vals
   renderFooter st h
 
 renderColumnHeaders :: Geometry -> UI.Screen ()
@@ -142,7 +155,12 @@ renderGridLines Geometry{geoRs = rs, geoRows = rows, geoBoundaries = boundaries}
         gridBg
         (joinGlyph (j > 0) (j < rows) (i > 0) (i < nb - 1))
 
-renderCells :: Geometry -> [[Value]] -> UI.Screen ()
+renderCells ::
+  Geometry ->
+  Map.Map (Int, Int) LiveBinding ->
+  Map.Map (Int, Int) FilePath ->
+  [[Value]] ->
+  UI.Screen ()
 renderCells
   Geometry
     { geoOx = ox
@@ -155,6 +173,8 @@ renderCells
     , geoRows = rows
     , geoBoundaries = boundaries
     }
+  subs
+  outs
   vals =
     forM_ (zip [0 ..] (take rows vals)) $ \(rowIx, rowVals) -> do
       let sheetRow = oy + rowIx
@@ -167,10 +187,13 @@ renderCells
       forM_ (zip [0 ..] (take cols rowVals)) $ \(colIx, val) -> do
         let sheetCol = ox + colIx
             focused = (sheetCol, sheetRow) == (cx, cy)
-            (fg, bg) =
-              if focused
-                then (focusFg, focusBg)
-                else (textFg, textBg)
+            live = Map.member (sheetCol, sheetRow) subs
+            published = Map.member (sheetCol, sheetRow) outs
+            (fg, bg)
+              | focused = (focusFg, focusBg)
+              | live = (liveFg, liveBg)
+              | published = (outFg, outBg)
+              | otherwise = (textFg, textBg)
         UI.drawText
           (gutterWidth + colIx * cw)
           screenRow
@@ -276,17 +299,6 @@ cursorLineCol :: Int -> Int -> Int -> (Int, Int)
 cursorLineCol width totalLines pos =
   let line = min (totalLines - 1) (pos `div` width)
    in (line, pos - line * width)
-
-showValue :: Value -> String
-showValue VBlank = ""
-showValue (VErr e) = e
-showValue (VStr s) = s
-showValue (VBool b) = if b then "TRUE" else "FALSE"
-showValue (VNum n)
-  | n == fromIntegral rounded = show rounded
-  | otherwise = show n
- where
-  rounded = round n :: Integer
 
 {- [^1]:
 Spans the whole row block, not just its content line: at higher

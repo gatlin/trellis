@@ -2,8 +2,8 @@
 
 {- |
 Module: Update
-Description: Event handling: navigation, zoom, pan, and the CPS-based
-formula-editing modal.
+Description: Event handling: navigation, zoom, pan, the CPS-based
+formula-editing modal, and draining/publishing live cell subscriptions.
 -}
 module Update (
   update,
@@ -18,14 +18,24 @@ module Update (
   clampCursor,
 ) where
 
-import Control.Monad (forM_, when)
+import Control.Concurrent.STM.MonadIO (
+  TVar,
+  atomically,
+  readTVarSTM,
+  writeTVarSTM,
+ )
+import Control.Monad (forM_, unless, when)
 import Data.Bits ((.&.))
 import qualified Data.Map.Strict as Map
+import Data.Maybe (isJust, listToMaybe)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
-import Formula (blank, renderExpr)
+import Formula (Expr, blank, evaluated, renderExpr, showValue, window)
+import Keymap (KeyMap (..), matches, matchesMouse)
+import Live (OutBinding (..), declareSubscription, enqueueOut, parseLiveSpec)
 import Parser (parseExpr)
 import SheetState (
   EditorState (..),
+  LiveBinding (..),
   SheetState (..),
   cellAt,
   clampOrigin,
@@ -36,8 +46,8 @@ import SheetState (
   rowStride,
  )
 import qualified Termbox2 as Tb2
-import Keymap (KeyMap (..), matches, matchesMouse)
 import Trellis.CPS (CPS, lift, reset, shift)
+import qualified Trellis.Orc as Orc
 import qualified Trellis.UI as UI
 
 termSize :: UI.Action (UI.Store SheetState) IO (Int, Int)
@@ -61,18 +71,74 @@ runEditor initial = shift $ \k ->
 blocking call - open an editor, get its result, act on it. Both ways of
 starting an edit (confirm key, double-click) call this via 'reset'.
 -}
-beginEdit :: (Int, Int) -> String -> Editor ()
-beginEdit pos initial = do
+beginEdit ::
+  Orc.Group -> TVar [((Int, Int), Expr)] -> (Int, Int) -> String -> Editor ()
+beginEdit root mailbox pos initial = do
   result <- runEditor initial
   case result of
     Nothing -> return ()
     Just buf
-      | null buf -> lift . UI.modify $ \st ->
-          st{cells = Map.delete pos (cells st)}
+      | null buf -> lift $ do
+          cancelSubscription pos
+          UI.modify (\st -> st{cells = Map.delete pos (cells st)})
+      | Just spec <- parseLiveSpec buf -> lift $ do
+          cancelSubscription pos
+          grp <- UI.liftIO (declareSubscription root mailbox pos spec)
+          UI.modify
+            ( \st -> st{subscriptions = Map.insert pos (LiveBinding grp buf) (subscriptions st)}
+            )
       | otherwise -> case parseExpr buf of
-          Right expr -> lift . UI.modify $ \st ->
-            st{cells = Map.insert pos expr (cells st)}
+          Right expr -> lift $ do
+            cancelSubscription pos
+            UI.modify (\st -> st{cells = Map.insert pos expr (cells st)})
           Left _ -> return ()
+
+{- | What to pre-fill an edit with: a live spec's own typed text if the
+cell is subscribed, otherwise its formula rendered back to text.
+-}
+existingText :: SheetState -> (Int, Int) -> String
+existingText st pos = case Map.lookup pos (subscriptions st) of
+  Just b -> liveSpecText b
+  Nothing -> renderExpr (Map.findWithDefault blank pos (cells st))
+
+-- | Kills a cell's subscription, if it has one, and forgets it.
+cancelSubscription :: (Int, Int) -> UI.Action (UI.Store SheetState) IO ()
+cancelSubscription pos = do
+  st <- UI.get
+  case Map.lookup pos (subscriptions st) of
+    Nothing -> return ()
+    Just b -> do
+      UI.liftIO (Orc.close (liveGroup b))
+      UI.modify (\st' -> st'{subscriptions = Map.delete pos (subscriptions st')})
+
+-- | Applies whatever live/async results have arrived since the last tick.
+drainLiveUpdates ::
+  TVar [((Int, Int), Expr)] -> UI.Action (UI.Store SheetState) IO ()
+drainLiveUpdates mailbox = do
+  updates <- UI.liftIO $ atomically $ do
+    xs <- readTVarSTM mailbox
+    writeTVarSTM mailbox []
+    return xs
+  unless (null updates) $
+    UI.modify (\st -> st{cells = foldr (uncurry Map.insert) (cells st) updates})
+
+{- | Publishes each "--out" cell's current value to its pipe, but only when
+it's actually changed since the last publish - otherwise every tick would
+write the same value again, whether or not anything happened.
+-}
+publishOutUpdates :: [OutBinding] -> UI.Action (UI.Store SheetState) IO ()
+publishOutUpdates outs = do
+  st <- UI.get
+  let vals = evaluated (cells st)
+  forM_ outs $ \b -> do
+    let str = maybe "" showValue (listToMaybe (concat (window (outPos b) 1 1 vals)))
+    UI.liftIO $ do
+      changed <- atomically $ do
+        prev <- readTVarSTM (outLast b)
+        if prev == Just str
+          then return False
+          else writeTVarSTM (outLast b) (Just str) >> return True
+      when changed (enqueueOut b str)
 
 -- | Does an incoming event carry a given key, of the given event type?
 isKey :: Tb2.Tb2Event -> Tb2.Tb2Key -> Bool
@@ -135,10 +201,19 @@ deleteAt pos s
       let (before, after) = splitAt pos s
        in (before ++ drop 1 after, pos)
 
-update :: KeyMap -> UI.Event -> UI.Action (UI.Store SheetState) IO ()
-update keymap (UI.Event evt) = do
+update ::
+  KeyMap ->
+  Orc.Group ->
+  TVar [((Int, Int), Expr)] ->
+  [OutBinding] ->
+  UI.Event ->
+  UI.Action (UI.Store SheetState) IO ()
+update _ _ mailbox outs UI.Tick = do
+  drainLiveUpdates mailbox
+  publishOutUpdates outs
+update keymap root mailbox _outs (UI.InputEvent evt) = do
   st <- UI.get
-  maybe navigating editorUpdate (editor st)
+  maybe navigating editing (editor st)
  where
   navigating
     | matches (moveUp keymap) evt = nudge (0, -1)
@@ -167,17 +242,21 @@ update keymap (UI.Event evt) = do
   beginEditHere = do
     st <- UI.get
     let pos = cursor st
-        existing = renderExpr (Map.findWithDefault blank pos (cells st))
-    reset (beginEdit pos existing)
+        existing = existingText st pos
+    reset (beginEdit root mailbox pos existing)
 
   -- \| While a formula is being typed, navigation is suspended entirely -
   -- only editing the buffer or leaving it (committed or cancelled) does
   -- anything, so a stray arrow key can't quietly abandon an edit.
-  editorUpdate m
+  editing est
     | matches (confirm keymap) evt =
-        when (null (editorBuffer m) || isValid (editorBuffer m)) $
-          closeEditor m (Just (editorBuffer m)) -- invalid, non-empty: stay open to fix it
-    | matches (cancel keymap) evt = closeEditor m Nothing
+        when
+          ( null (editorBuffer est)
+              || isValid (editorBuffer est)
+              || isJust (parseLiveSpec (editorBuffer est))
+          )
+          $ closeEditor est (Just (editorBuffer est)) -- invalid, non-empty: stay open to fix it
+    | matches (cancel keymap) evt = closeEditor est Nothing
     -- \| Cursor movement is always the physical arrow keys\/Home\/End,
     -- never routed through the keymap - unlike sheet navigation, so it
     -- can't be broken by a remap like @moveLeft = h@.
@@ -224,8 +303,10 @@ update keymap (UI.Event evt) = do
     UI.modify (\st -> st{editor = Nothing})
     editorResume m result
 
-  clearFocusedCell =
-    UI.modify (\st -> st{cells = Map.delete (cursor st) (cells st)})
+  clearFocusedCell = do
+    st <- UI.get
+    cancelSubscription (cursor st)
+    UI.modify (\st' -> st'{cells = Map.delete (cursor st) (cells st')})
 
   clickCell = do
     st <- UI.get
@@ -258,8 +339,8 @@ update keymap (UI.Event evt) = do
 
   openForEditing target = do
     st <- UI.get
-    let existing = renderExpr (Map.findWithDefault blank target (cells st))
-    reset (beginEdit target existing)
+    let existing = existingText st target
+    reset (beginEdit root mailbox target existing)
   nudge (dx, dy) = do
     st <- UI.get
     let (cx, cy) = cursor st
@@ -310,7 +391,7 @@ makes 'shift'\/'reset' storable here at all.
 'shift' hands us the rest of the enclosing computation as an ordinary
 callback @k@; rather than run it now (there's nothing to run it with yet -
 the user hasn't typed anything), it's stashed in a fresh 'EditorState' for
-'editorUpdate' to call once editing actually finishes.
+'editing' to call once editing actually finishes.
 -}
 
 {- [^3]:

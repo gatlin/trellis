@@ -104,7 +104,7 @@ isValidTests =
     [ testCase "a well-formed formula is valid" $ isValid "1+2*3" @?= True
     , testCase "an incomplete formula is invalid" $ isValid "1+" @?= False
     , -- An empty buffer is handled separately, by a `null buf` check at
-      -- isValid's call site in Update.modalUpdate, not by isValid itself.
+      -- isValid's call site in Update.editing, not by isValid itself.
       testCase "an empty buffer doesn't parse on its own" $
         isValid "" @?= False
     ]
