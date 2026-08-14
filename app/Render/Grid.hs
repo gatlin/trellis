@@ -19,7 +19,6 @@ import qualified Data.Map.Strict as Map
 import Formula (Value (..), blank, evaluated, renderExpr, showValue, window)
 import Render.Chart (renderChart)
 import Render.Editor (renderEditor)
-import Render.Pivot (renderPivot)
 import Render.Theme (
   fillBg,
   fillFg,
@@ -100,7 +99,6 @@ render st = do
     (heatmapColors st)
     vals
   renderChart st
-  renderPivot st
   renderFooter st h
 
 {- | Per-cell colors for an active heatmap, or 'Nothing' when no heatmap is

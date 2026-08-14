@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               trellis
-version:            0.1.0.0
+version:            0.1.2.0
 synopsis:           a comonadic terminal spreadsheet
 author:             Gatlin Cheyenne Johnson
 maintainer:         gatlin@niltag.net
@@ -73,11 +73,11 @@ executable trellis
     -- but not reusable machinery themselves - so unlike src/Trellis, they
     -- live here.
     other-modules:    SheetState, SheetState.Geometry, SheetState.Fill,
-                      SheetState.Chart, SheetState.Pivot,
+                      SheetState.Chart,
                       Render, Render.Theme, Render.Editor, Render.Grid,
-                      Render.Chart, Render.Pivot,
+                      Render.Chart,
                       Update, Update.Events, Update.Buffer, Update.Navigation,
-                      Update.Subscriptions, Update.Fill, Update.Chart, Update.Pivot,
+                      Update.Subscriptions, Update.Fill, Update.Chart,
                       Update.Core,
                       Formula, Formula.Builtins, Parser, Keymap, Live, Live.In,
                       Live.Out, Cli, SheetFile
@@ -109,11 +109,11 @@ test-suite trellis-test
     other-modules:    SheetStateSpec, FormulaSpec, UpdateSpec, LiveSpec, CliSpec,
                       SheetFileSpec,
                       SheetState, SheetState.Geometry, SheetState.Fill,
-                      SheetState.Chart, SheetState.Pivot,
+                      SheetState.Chart,
                       Formula, Formula.Builtins, Parser, Keymap, Live, Live.In,
                       Live.Out, Cli, SheetFile,
                       Update, Update.Events, Update.Buffer, Update.Navigation,
-                      Update.Subscriptions, Update.Fill, Update.Chart, Update.Pivot,
+                      Update.Subscriptions, Update.Fill, Update.Chart,
                       Update.Core
 
     build-depends:    base,

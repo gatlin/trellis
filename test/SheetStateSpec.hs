@@ -4,12 +4,10 @@ import SheetState (
   Chart (..),
   ChartType (..),
   FillSource (..),
-  Pivot (..),
   cellAt,
   clampAxis,
   clampRange,
   classifyChartRange,
-  classifyPivotRange,
   classifySelection,
   heatmapStep,
   previewRect,
@@ -30,7 +28,6 @@ tests =
     , previewRectTests
     , classifyChartRangeTests
     , heatmapStepTests
-    , classifyPivotRangeTests
     ]
 
 clampAxisTests :: TestTree
@@ -119,15 +116,17 @@ classifyChartRangeTests =
     [ testCase "no selection never qualifies, for any type" $ do
         classifyChartRange BarChart Nothing @?= Nothing
         classifyChartRange Heatmap Nothing @?= Nothing
-    , testCase "BarChart accepts a row selection" $
-        classifyChartRange BarChart (Just ((1, 5), (4, 5)))
-          @?= Just (Chart BarChart ((1, 5), (4, 5)))
-    , testCase "LineChart accepts a column selection" $
-        classifyChartRange LineChart (Just ((3, 0), (3, 6)))
-          @?= Just (Chart LineChart ((3, 0), (3, 6)))
-    , testCase "BarChart accepts a degenerate 1x1 selection" $
-        classifyChartRange BarChart (Just ((2, 2), (2, 2)))
-          @?= Just (Chart BarChart ((2, 2), (2, 2)))
+    , testCase "BarChart accepts a header row plus one data row" $
+        classifyChartRange BarChart (Just ((1, 5), (4, 6)))
+          @?= Just (Chart BarChart ((1, 5), (4, 6)))
+    , testCase "LineChart accepts a header column plus one data column" $
+        classifyChartRange LineChart (Just ((3, 0), (4, 6)))
+          @?= Just (Chart LineChart ((3, 0), (4, 6)))
+    , testCase "BarChart accepts the smallest valid selection (2 rows, 1 column)" $
+        classifyChartRange BarChart (Just ((2, 2), (2, 3)))
+          @?= Just (Chart BarChart ((2, 2), (2, 3)))
+    , testCase "a single selected cell no longer qualifies - no room for a header and a datum" $
+        classifyChartRange BarChart (Just ((2, 2), (2, 2))) @?= Nothing
     , testCase "BarChart rejects a genuine 2D block" $
         classifyChartRange BarChart (Just ((0, 0), (2, 2))) @?= Nothing
     , testCase "LineChart rejects a genuine 2D block" $
@@ -139,8 +138,8 @@ classifyChartRangeTests =
         classifyChartRange Heatmap (Just ((1, 5), (4, 5)))
           @?= Just (Chart Heatmap ((1, 5), (4, 5)))
     , testCase "corners normalize regardless of order" $
-        classifyChartRange BarChart (Just ((4, 5), (1, 5)))
-          @?= Just (Chart BarChart ((1, 5), (4, 5)))
+        classifyChartRange BarChart (Just ((4, 6), (1, 5)))
+          @?= Just (Chart BarChart ((1, 5), (4, 6)))
     ]
 
 heatmapStepTests :: TestTree
@@ -156,25 +155,4 @@ heatmapStepTests =
         heatmapStep 5 (0, 10) (-0.001) @?= 0
     , testCase "clamps a value fractionally above the maximum" $
         heatmapStep 5 (0, 10) 10.001 @?= 4
-    ]
-
-classifyPivotRangeTests :: TestTree
-classifyPivotRangeTests =
-  testGroup
-    "classifyPivotRange"
-    [ testCase "no selection never qualifies" $
-        classifyPivotRange Nothing @?= Nothing
-    , testCase "a two-column selection qualifies" $
-        classifyPivotRange (Just ((1, 2), (2, 9)))
-          @?= Just (Pivot ((1, 2), (2, 9)))
-    , testCase "a single-column selection doesn't qualify" $
-        classifyPivotRange (Just ((1, 2), (1, 9))) @?= Nothing
-    , testCase "a three-column selection doesn't qualify" $
-        classifyPivotRange (Just ((1, 2), (3, 9))) @?= Nothing
-    , testCase "a degenerate single-row two-column selection still qualifies" $
-        classifyPivotRange (Just ((1, 5), (2, 5)))
-          @?= Just (Pivot ((1, 5), (2, 5)))
-    , testCase "corners normalize regardless of order" $
-        classifyPivotRange (Just ((2, 9), (1, 2)))
-          @?= Just (Pivot ((1, 2), (2, 9)))
     ]

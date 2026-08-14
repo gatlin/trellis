@@ -95,13 +95,6 @@ data KeyMap = KeyMap
   same key again closes it; a different one switches, if the selection
   qualifies (see 'SheetState.classifyChartRange').
   -}
-  , pivotKey :: Binding
-  {- ^ Toggles a pivot-table summary (count\/sum\/average per distinct
-  category) over a selected two-column range - the same key again closes
-  it; unlike the three chart keys there's only one pivot "type", so
-  there's no "switch" behavior to mirror (see
-  'SheetState.classifyPivotRange').
-  -}
   , saveKey :: Binding
   -- ^ Writes the sheet back to the file it was loaded from, if any.
   , selectUp, selectDown, selectLeft, selectRight :: Binding
@@ -116,9 +109,8 @@ data KeyMap = KeyMap
 {- | Arrows navigate, the wheel zooms, left-click selects\/drags,
 middle-click-drag pans, right-click-drag fills a range with the source
 cell's formula (adjusted), @b@\/@l@\/@h@ toggle a bar\/line\/heatmap
-chart over the selection, @p@ toggles a pivot-table summary over it,
-Enter starts\/commits an edit, Escape cancels, Delete clears a cell.
-Kept in sync with 'defaultConfigText' by hand.
+chart over the selection, Enter starts\/commits an edit, Escape cancels,
+Delete clears a cell. Kept in sync with 'defaultConfigText' by hand.
 -}
 defaultKeyMap :: KeyMap
 defaultKeyMap =
@@ -138,7 +130,6 @@ defaultKeyMap =
     , barChartKey = Plain (Char 'b')
     , lineChartKey = Plain (Char 'l')
     , heatmapKey = Plain (Char 'h')
-    , pivotKey = Plain (Char 'p')
     , saveKey = Plain (Key Tb2.keyCtrlS)
     , selectUp = WithAlt (Key Tb2.keyArrowUp)
     , selectDown = WithAlt (Key Tb2.keyArrowDown)
@@ -185,7 +176,6 @@ bindingSetters =
   , ("barChartKey", \k m -> m{barChartKey = k})
   , ("lineChartKey", \k m -> m{lineChartKey = k})
   , ("heatmapKey", \k m -> m{heatmapKey = k})
-  , ("pivotKey", \k m -> m{pivotKey = k})
   , ("saveKey", \k m -> m{saveKey = k})
   , ("selectUp", \k m -> m{selectUp = k})
   , ("selectDown", \k m -> m{selectDown = k})
@@ -279,11 +269,6 @@ defaultConfigText =
     , "# selection - press the same one again to close it, or a different"
     , "# one to switch, as long as the selection still qualifies."
     , "#"
-    , "# pivotKey toggles a pivot-table summary over a selected two-column"
-    , "# range - a category column and a value column - showing count/sum/"
-    , "# average per distinct category. Press it again to close; there's no"
-    , "# second pivot \"type\" to switch to."
-    , "#"
     , "# saveKey writes the sheet back to the file it was loaded from, if"
     , "# any - a no-op if Trellis wasn't started with a file."
     , "#"
@@ -307,7 +292,6 @@ defaultConfigText =
     , "barChartKey = b"
     , "lineChartKey = l"
     , "heatmapKey = h"
-    , "pivotKey = p"
     , "saveKey = Ctrl+S"
     , "selectUp = Alt+ArrowUp"
     , "selectDown = Alt+ArrowDown"

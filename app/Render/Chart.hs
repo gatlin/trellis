@@ -7,8 +7,6 @@ the already-selected cells directly.
 -}
 module Render.Chart (
   renderChart,
-  chartPanelWidth,
-  chartPanelHeight,
 ) where
 
 import Control.Monad (forM_, when)
@@ -47,8 +45,8 @@ renderChart st = case chart st of
         innerWidth = boxWidth - 2
         innerHeight = boxHeight - 2
         ((_, y0), (_, y1)) = chartRange c
-        indexAlongX = y0 == y1
-        vals = chartValues (chartRange c) (evaluated (cells st))
+        indexAlongX = y1 - y0 == 1
+        vals = chartValues indexAlongX (chartRange c) (evaluated (cells st))
         labels = chartLabels indexAlongX (chartRange c) (evaluated (cells st))
     forM_ [top + 1 .. bottom - 1] $ \y ->
       UI.drawText (left + 1) y textFg textBg (replicate (boxWidth - 2) ' ')
@@ -74,40 +72,45 @@ renderChart st = case chart st of
         drawLine innerLeft innerTop innerWidth innerHeight indexAlongX vals
       Heatmap -> return () -- unreachable - handled by the outer match above
 
-{- | The chart's range, as evaluated 'Value's flattened in index order,
-each read as a 'Double' - a blank or non-numeric cell reads as @0@, the
-same lenient stance every chart takes (a chart isn't a formula result
-other cells depend on; it's a rendering aid over whatever's there).
+{- | The chart's data - the range's second row (a horizontal\/row-based
+chart) or second column (vertical\/column-based) - the first being the
+header row\/column 'chartLabels' reads instead - as evaluated 'Value's
+flattened in index order, each read as a 'Double'. A blank or
+non-numeric cell reads as @0@, the same lenient stance every chart
+takes (a chart isn't a formula result other cells depend on; it's a
+rendering aid over whatever's there).
 -}
-chartValues :: ((Int, Int), (Int, Int)) -> Sheet2 Value -> [Double]
-chartValues ((x0, y0), (x1, y1)) sh =
-  -- \| 'window' over-fetches by one in each direction (its other callers
-  -- all trim the same way) - trimmed back down to the exact range here.
-  concatMap (map asNum . take cols) (take rows (window (x0, y0) cols rows sh))
+chartValues :: Bool -> ((Int, Int), (Int, Int)) -> Sheet2 Value -> [Double]
+chartValues indexAlongX ((x0, y0), (x1, y1)) sh
+  | indexAlongX = map asNum (go (x0, y0 + 1) cols 1)
+  | otherwise = map asNum (go (x0 + 1, y0) 1 rows)
  where
   cols = x1 - x0 + 1
   rows = y1 - y0 + 1
+  -- \| 'window' over-fetches by one in each direction (its other callers
+  -- all trim the same way) - trimmed back down to the exact range here.
+  go origin w h = concatMap (take w) (take h (window origin w h sh))
   asNum (VNum n) = n
   asNum _ = 0
 
-{- | The label for each bar, read from the cell just outside the charted
-range rather than from the range itself - one row above for a
-horizontal (row) selection, one column to the left for a vertical
-(column) one, the usual "header sits just outside the data" spreadsheet
-convention. A coordinate that runs off the sheet (charting row 0 puts
-the label row at -1, for instance) simply reads as blank, same as any
-other never-populated cell - no special-casing needed since 'Sheet2' is
-already total over all coordinates.
+{- | The label for each bar, read from the charted range's own first row
+(a horizontal\/row-based chart) or first column (vertical\/column-based)
+- the "select your data including its header" convention, the same one
+'SheetState.classifyChartRange' now requires room for. A header cell
+left blank falls back to that bar's own row\/column number - the same
+number already shown in the grid's own header - rather than showing
+nothing, which reads as broken rather than "no header typed".
 -}
 chartLabels :: Bool -> ((Int, Int), (Int, Int)) -> Sheet2 Value -> [String]
 chartLabels indexAlongX ((x0, y0), (x1, y1)) sh
-  | indexAlongX = go (x0, y0 - 1) cols 1
-  | otherwise = go (x0 - 1, y0) 1 rows
+  | indexAlongX = zipWith fallback [x0 ..] (go (x0, y0) cols 1)
+  | otherwise = zipWith fallback [y0 ..] (go (x0, y0) 1 rows)
  where
   cols = x1 - x0 + 1
   rows = y1 - y0 + 1
   go origin w h =
     concatMap (map showValue . take w) (take h (window origin w h sh))
+  fallback i lbl = if null lbl then show i else lbl
 
 {- | The box's fixed target size, capped against the terminal the same
 way "Render.Editor"'s 'Render.Editor.modalWidth' is.

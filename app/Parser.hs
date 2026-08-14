@@ -228,7 +228,17 @@ notP = mk1 "NOT" (Expr . NotF)
 strP = mk1 "STR" (Expr . ToStringF)
 numP = mk1 "NUM" (Expr . ToNumberF)
 
-sumP, avgP, countP, minP, maxP, productP, medianP, varP, stdevP, countaP :: Parser Expr
+sumP
+  , avgP
+  , countP
+  , minP
+  , maxP
+  , productP
+  , medianP
+  , varP
+  , stdevP
+  , countaP ::
+    Parser Expr
 sumP = aggCallP "SUM" SumOp
 avgP = aggCallP "AVERAGE" AvgOp
 countP = aggCallP "COUNT" CountOp
@@ -256,22 +266,33 @@ aggCallP name op = do
   pure (Expr (RangeF op start end))
 
 -- | The fourteen one-argument math\/string built-ins: @NAME(expr)@.
-absP, sqrtP, logP, lnP, expP, signP, intP, truncP, ceilingP, floorP :: Parser Expr
+absP
+  , sqrtP
+  , logP
+  , lnP
+  , expP
+  , signP
+  , intP
+  , truncP
+  , ceilingP
+  , floorP ::
+    Parser Expr
 lenP, upperP, lowerP, trimP :: Parser Expr
-absP = mk1 "ABS" (\a -> Expr (Call1F AbsOp a))
-sqrtP = mk1 "SQRT" (\a -> Expr (Call1F SqrtOp a))
-logP = mk1 "LOG" (\a -> Expr (Call1F LogOp a))
-lnP = mk1 "LN" (\a -> Expr (Call1F LnOp a))
-expP = mk1 "EXP" (\a -> Expr (Call1F ExpOp a))
-signP = mk1 "SIGN" (\a -> Expr (Call1F SignOp a))
-intP = mk1 "INT" (\a -> Expr (Call1F IntOp a))
-truncP = mk1 "TRUNC" (\a -> Expr (Call1F TruncOp a))
-ceilingP = mk1 "CEILING" (\a -> Expr (Call1F CeilingOp a))
-floorP = mk1 "FLOOR" (\a -> Expr (Call1F FloorOp a))
-lenP = mk1 "LEN" (\a -> Expr (Call1F LenOp a))
-upperP = mk1 "UPPER" (\a -> Expr (Call1F UpperOp a))
-lowerP = mk1 "LOWER" (\a -> Expr (Call1F LowerOp a))
-trimP = mk1 "TRIM" (\a -> Expr (Call1F TrimOp a))
+absP = mk1 "ABS" (Expr . Call1F AbsOp)
+sqrtP = mk1 "SQRT" (Expr . Call1F SqrtOp)
+logP = mk1 "LOG" (Expr . Call1F LogOp)
+lnP = mk1 "LN" (Expr . Call1F LnOp)
+expP = mk1 "EXP" (Expr . Call1F ExpOp)
+signP = mk1 "SIGN" (Expr . Call1F SignOp)
+intP = mk1 "INT" (Expr . Call1F IntOp)
+truncP = mk1 "TRUNC" (Expr . Call1F TruncOp)
+ceilingP = mk1 "CEILING" (Expr . Call1F CeilingOp)
+floorP = mk1 "FLOOR" (Expr . Call1F FloorOp)
+
+lenP = mk1 "LEN" (Expr . Call1F LenOp)
+upperP = mk1 "UPPER" (Expr . Call1F UpperOp)
+lowerP = mk1 "LOWER" (Expr . Call1F LowerOp)
+trimP = mk1 "TRIM" (Expr . Call1F TrimOp)
 
 -- | The nine two-argument math\/string built-ins: @NAME(expr, expr)@.
 modP, powerP, roundP, roundUpP, roundDownP :: Parser Expr
@@ -283,6 +304,7 @@ powerP = mk2 "POWER" (\a b -> Expr (Call2F PowerOp a b))
 roundUpP = mk2 "ROUNDUP" (\a b -> Expr (Call2F RoundUpOp a b))
 roundDownP = mk2 "ROUNDDOWN" (\a b -> Expr (Call2F RoundDownOp a b))
 roundP = mk2 "ROUND" (\a b -> Expr (Call2F RoundOp a b))
+
 leftP = mk2 "LEFT" (\a b -> Expr (Call2F LeftOp a b))
 rightP = mk2 "RIGHT" (\a b -> Expr (Call2F RightOp a b))
 findP = mk2 "FIND" (\a b -> Expr (Call2F FindOp a b))

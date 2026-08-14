@@ -26,5 +26,5 @@ toggleChart ct = UI.modify $ \st ->
   case chart st of
     Just c | chartType c == ct -> st{chart = Nothing}
     _ -> case classifyChartRange ct (selection st) of
-      Just newChart -> st{chart = Just newChart, pivot = Nothing}
+      Just newChart -> st{chart = Just newChart}
       Nothing -> st

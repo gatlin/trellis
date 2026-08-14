@@ -39,7 +39,6 @@ import Update.Chart (toggleChart)
 import Update.Events (dragging, isKey, isMouse, isShiftKey, printableChar)
 import Update.Fill (commitFill, fillDragTo)
 import Update.Navigation (moveTo, nudge, nudgeSelecting, panBy, zoomBy)
-import Update.Pivot (togglePivot)
 import Update.Subscriptions (
   cancelSubscription,
   drainLiveUpdates,
@@ -161,13 +160,12 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     | matches (barChartKey keymap) evt = toggleChart BarChart
     | matches (lineChartKey keymap) evt = toggleChart LineChart
     | matches (heatmapKey keymap) evt = toggleChart Heatmap
-    | matches (pivotKey keymap) evt = togglePivot
     | matches (saveKey keymap) evt = saveSheet
     -- \| Otherwise inert while navigating (only 'editing' uses it to
     -- discard an edit) - repurposed here as the obvious way to back out
     -- of a selection, or an open chart, that's no longer wanted.
     | matches (cancel keymap) evt =
-        UI.modify (\st -> st{selection = Nothing, chart = Nothing, pivot = Nothing})
+        UI.modify (\st -> st{selection = Nothing, chart = Nothing})
     | otherwise = return ()
 
   -- \| While a formula is being typed, navigation is suspended entirely -

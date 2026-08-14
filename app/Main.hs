@@ -57,8 +57,8 @@ run opts = do
       [ (pos, spec, text)
       | (pos, text) <- fileCellLines
       , Just spec <- [parseLiveSpec text]
-      ] $
-      \(pos, spec, text) -> do
+      ]
+      $ \(pos, spec, text) -> do
         grp <- declareSubscription root mailbox pos spec
         return (pos, LiveBinding grp text)
   ins <- forM (cliIns opts) $ \(pos, path) -> do
@@ -76,7 +76,15 @@ run opts = do
     id
     setup
     ( UI.activity
-        (update keymap root mailbox (fileOutHandles ++ cliOutHandles) (cliFile opts))
+        ( update
+            keymap
+            root
+            mailbox
+            ( fileOutHandles
+                ++ cliOutHandles
+            )
+            (cliFile opts)
+        )
         render
         st0
     )
@@ -110,7 +118,10 @@ loadFileEntries (Just path) = do
     Left e
       | isDoesNotExistError e -> return []
       | otherwise ->
-          hPutStrLn stderr ("trellis: " ++ path ++ ": " ++ show e) >> exitFailure
+          hPutStrLn
+            stderr
+            ("trellis: " ++ path ++ ": " ++ show e)
+            >> exitFailure
     Right txt -> do
       let (warnings, entries) = parseSheetFile txt
       mapM_ (\w -> hPutStrLn stderr ("trellis: " ++ path ++ ": " ++ w)) warnings

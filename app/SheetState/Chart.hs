@@ -25,17 +25,20 @@ data Chart = Chart
   deriving (Eq, Show)
 
 {- | Does the current selection qualify for this chart type? 'BarChart'\/
-'LineChart' need a clean single row or column - a degenerate 1x1
-selection counts (a one-bar\/one-point chart is harmless), but a genuine
-2D block doesn't. 'Heatmap' accepts any non-empty rectangle - the one of
-the three that actually uses full 2D ranges. No selection at all never
-qualifies, for any type.
+'LineChart' need exactly two rows (a header row naming each column, then
+one data row) or exactly two columns (a header column, then one data
+column) - the same "select your data including its header" convention
+spreadsheets use for building a chart. A single selected cell no longer
+qualifies on its own - there's no room for both a header and a datum.
+'Heatmap' accepts any non-empty rectangle - it recolors cells directly
+rather than showing text labels, so it has no header-row concept to
+match. No selection at all never qualifies, for any type.
 -}
 classifyChartRange :: ChartType -> Maybe ((Int, Int), (Int, Int)) -> Maybe Chart
 classifyChartRange _ Nothing = Nothing
 classifyChartRange ct (Just (a, b))
   | ct == Heatmap = Just (Chart ct range)
-  | x0 == x1 || y0 == y1 = Just (Chart ct range)
+  | y1 - y0 == 1 || x1 - x0 == 1 = Just (Chart ct range)
   | otherwise = Nothing
  where
   (x0, x1) = (min (fst a) (fst b), max (fst a) (fst b))

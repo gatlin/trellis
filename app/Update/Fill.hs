@@ -36,7 +36,11 @@ fillDragTo screenX screenY = do
       Nothing ->
         UI.modify
           ( \st' ->
-              st'{fillDrag = Just (classifySelection target (selection st'), target)}
+              st'
+                { fillDrag =
+                    Just
+                      (classifySelection target (selection st'), target)
+                }
           )
       Just (src, _) -> UI.modify (\st' -> st'{fillDrag = Just (src, target)})
 
@@ -111,5 +115,9 @@ fillCell ::
 fillCell (sx, sy) srcExpr pos@(x, y) = do
   cancelSubscription pos
   UI.modify
-    ( \st -> st{cells = Map.insert pos (adjustRefs (x - sx, y - sy) srcExpr) (cells st)}
+    ( \st ->
+        st
+          { cells =
+              Map.insert pos (adjustRefs (x - sx, y - sy) srcExpr) (cells st)
+          }
     )
