@@ -24,6 +24,7 @@ module Formula (
   fromPair,
   toPair,
   compile,
+  aggregate,
   evaluated,
   window,
   renderExpr,

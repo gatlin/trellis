@@ -7,6 +7,8 @@ the already-selected cells directly.
 -}
 module Render.Chart (
   renderChart,
+  chartPanelWidth,
+  chartPanelHeight,
 ) where
 
 import Control.Monad (forM_, when)
@@ -47,6 +49,7 @@ renderChart st = case chart st of
         ((_, y0), (_, y1)) = chartRange c
         indexAlongX = y0 == y1
         vals = chartValues (chartRange c) (evaluated (cells st))
+        labels = chartLabels indexAlongX (chartRange c) (evaluated (cells st))
     forM_ [top + 1 .. bottom - 1] $ \y ->
       UI.drawText (left + 1) y textFg textBg (replicate (boxWidth - 2) ' ')
     UI.drawHLine top left right modalBorderFg modalBorderBg 0x2501
@@ -58,8 +61,17 @@ renderChart st = case chart st of
     UI.drawGlyph left bottom modalBorderFg modalBorderBg 0x2517
     UI.drawGlyph right bottom modalBorderFg modalBorderBg 0x251B
     case chartType c of
-      BarChart -> drawBars innerLeft innerTop innerWidth innerHeight indexAlongX vals
-      LineChart -> drawLine innerLeft innerTop innerWidth innerHeight indexAlongX vals
+      BarChart ->
+        drawBars
+          innerLeft
+          innerTop
+          innerWidth
+          innerHeight
+          indexAlongX
+          labels
+          vals
+      LineChart ->
+        drawLine innerLeft innerTop innerWidth innerHeight indexAlongX vals
       Heatmap -> return () -- unreachable - handled by the outer match above
 
 {- | The chart's range, as evaluated 'Value's flattened in index order,
@@ -78,8 +90,28 @@ chartValues ((x0, y0), (x1, y1)) sh =
   asNum (VNum n) = n
   asNum _ = 0
 
--- | The box's fixed target size, capped against the terminal the same
--- way "Render.Editor"'s 'Render.Editor.modalWidth' is.
+{- | The label for each bar, read from the cell just outside the charted
+range rather than from the range itself - one row above for a
+horizontal (row) selection, one column to the left for a vertical
+(column) one, the usual "header sits just outside the data" spreadsheet
+convention. A coordinate that runs off the sheet (charting row 0 puts
+the label row at -1, for instance) simply reads as blank, same as any
+other never-populated cell - no special-casing needed since 'Sheet2' is
+already total over all coordinates.
+-}
+chartLabels :: Bool -> ((Int, Int), (Int, Int)) -> Sheet2 Value -> [String]
+chartLabels indexAlongX ((x0, y0), (x1, y1)) sh
+  | indexAlongX = go (x0, y0 - 1) cols 1
+  | otherwise = go (x0 - 1, y0) 1 rows
+ where
+  cols = x1 - x0 + 1
+  rows = y1 - y0 + 1
+  go origin w h =
+    concatMap (map showValue . take w) (take h (window origin w h sh))
+
+{- | The box's fixed target size, capped against the terminal the same
+way "Render.Editor"'s 'Render.Editor.modalWidth' is.
+-}
 chartPanelWidth, chartPanelHeight :: Int
 chartPanelWidth = 60
 chartPanelHeight = 20
@@ -114,19 +146,21 @@ towards-baseline direction's eighth-block precision - Unicode's
 partial-block glyphs only cover the near-baseline orientations this
 uses (lower-eighths, left-eighths), not their mirror images.
 
-Each bar's own value is labeled - along the bottom for upright bars
-(plenty of horizontal room there for a short number), or in a narrow
-column at the start for flat ones (numbers need their own horizontal
-run, so they can't share a bar's single row the way an upright bar's
-label can share its column).
+Each bar is labeled with the header text 'chartLabels' reads for it,
+not its own value - along the bottom for upright bars (plenty of
+horizontal room there for a short label), or in a narrow column at the
+start for flat ones (labels need their own horizontal run, so they
+can't share a bar's single row the way an upright bar's label can share
+its column).
 -}
-drawBars :: Int -> Int -> Int -> Int -> Bool -> [Double] -> UI.Screen ()
-drawBars left top width height indexAlongX vals
+drawBars ::
+  Int -> Int -> Int -> Int -> Bool -> [String] -> [Double] -> UI.Screen ()
+drawBars left top width height indexAlongX labels vals
   | null shown = return ()
-  | otherwise = forM_ (zip [0 ..] shown) $ \(i, v) -> do
+  | otherwise = forM_ (zip3 [0 ..] shownLabels shown) $ \(i, lbl, v) -> do
       let fg = chartPalette !! (i `mod` length chartPalette)
           slotStart = indexOrigin + i * slotSize
-          label = take labelSpace (showValue (VNum v))
+          label = take labelSpace lbl
       forM_ [0 .. barThickness - 1] $ \o ->
         if indexAlongX
           then drawVBar fg (slotStart + o) baseline (toEighths v)
@@ -140,10 +174,18 @@ drawBars left top width height indexAlongX vals
   -- up a narrow column at the start instead - see the function doc.
   (indexOrigin, indexTotal, barLeft, barTop, barWidth, barHeight)
     | indexAlongX = (left, width, left, top, width, height - 1)
-    | otherwise = (top, height, left + labelSpace, top, max 1 (width - labelSpace), height)
+    | otherwise =
+        ( top
+        , height
+        , left + labelSpace
+        , top
+        , max 1 (width - labelSpace)
+        , height
+        )
   labelRow = top + height - 1
   labelCol = left
   shown = take indexTotal vals
+  shownLabels = take indexTotal (labels ++ repeat "")
   n = length shown
   slotSize = max 1 (indexTotal `div` n)
   barThickness = max 1 (slotSize - 1)
@@ -168,28 +210,39 @@ drawBars left top width height indexAlongX vals
         e = min (space * 8) (round (abs v / scale * fromIntegral (space * 8)))
      in if v >= 0 then e else negate e
 
--- | One upright bar, in the given color, at screen column @x@, growing up
--- from @baseline@ for a positive @eighths@, or down (whole rows only)
--- for a negative one.
+{- | One upright bar, in the given color, at screen column @x@, growing up
+from @baseline@ for a positive @eighths@, or down (whole rows only)
+for a negative one.
+-}
 drawVBar :: Tb2.Tb2ColorAttr -> Int -> Int -> Int -> UI.Screen ()
 drawVBar fg x baseline eighths
   | eighths >= 0 = do
-      forM_ [1 .. fullRows] $ \i -> UI.drawGlyph x (baseline - i) fg chartBg fullBlock
+      forM_ [1 .. fullRows] $ \i ->
+        UI.drawGlyph x (baseline - i) fg chartBg fullBlock
       when (partial > 0) $
-        UI.drawGlyph x (baseline - fullRows - 1) fg chartBg (eighthBlocksUp !! (partial - 1))
-  | otherwise = forM_ [1 .. downRows] $ \i -> UI.drawGlyph x (baseline + i) fg chartBg fullBlock
+        UI.drawGlyph
+          x
+          (baseline - fullRows - 1)
+          fg
+          chartBg
+          (eighthBlocksUp !! (partial - 1))
+  | otherwise =
+      forM_ [1 .. downRows] $ \i ->
+        UI.drawGlyph x (baseline + i) fg chartBg fullBlock
  where
   fullRows = eighths `div` 8
   partial = eighths `mod` 8
   downRows = (abs eighths + 7) `div` 8
 
--- | One flat bar, in the given color, at screen row @y@, growing right
--- from @baseline@ for a positive @eighths@, or left (whole columns
--- only) for a negative one.
+{- | One flat bar, in the given color, at screen row @y@, growing right
+from @baseline@ for a positive @eighths@, or left (whole columns
+only) for a negative one.
+-}
 drawHBar :: Tb2.Tb2ColorAttr -> Int -> Int -> Int -> UI.Screen ()
 drawHBar fg y baseline eighths
   | eighths >= 0 = do
-      forM_ [1 .. fullCols] $ \i -> UI.drawGlyph (baseline + i) y fg chartBg fullBlock
+      forM_ [1 .. fullCols] $ \i ->
+        UI.drawGlyph (baseline + i) y fg chartBg fullBlock
       when (partial > 0) $
         UI.drawGlyph
           (baseline + fullCols + 1)
@@ -197,7 +250,8 @@ drawHBar fg y baseline eighths
           fg
           chartBg
           (eighthBlocksRight !! (partial - 1))
-  | otherwise = forM_ [1 .. leftCols] $ \i -> UI.drawGlyph (baseline - i) y fg chartBg fullBlock
+  | otherwise = forM_ [1 .. leftCols] $ \i ->
+      UI.drawGlyph (baseline - i) y fg chartBg fullBlock
  where
   fullCols = eighths `div` 8
   partial = eighths `mod` 8
@@ -220,7 +274,12 @@ drawLine left top width height indexAlongX vals
   | otherwise = do
       forM_ (Map.toList dots) $ \((cx, cy), bits) ->
         UI.drawGlyph (left + cx) (top + cy) chartFg chartBg (0x2800 + bits)
-      UI.drawText left top chartFg chartBg (take width ("max " ++ showValue (VNum hi)))
+      UI.drawText
+        left
+        top
+        chartFg
+        chartBg
+        (take width ("max " ++ showValue (VNum hi)))
       UI.drawText
         left
         (top + height - 1)
@@ -231,19 +290,31 @@ drawLine left top width height indexAlongX vals
   n = length vals
   lo = minimum vals
   hi = maximum vals
-  subIndexMax = (if indexAlongX then width else height) * (if indexAlongX then 2 else 4)
-  subValueMax = (if indexAlongX then height else width) * (if indexAlongX then 4 else 2)
+  subIndexMax =
+    (if indexAlongX then width else height) * (if indexAlongX then 2 else 4)
+  subValueMax =
+    (if indexAlongX then height else width) * (if indexAlongX then 4 else 2)
   toSubIndex i =
     round
-      ( fromIntegral i / fromIntegral (max 1 (n - 1)) * fromIntegral (subIndexMax - 1) ::
+      ( fromIntegral i
+          / fromIntegral (max 1 (n - 1))
+          * fromIntegral (subIndexMax - 1) ::
           Double
       )
   toSubValue v
     | hi == lo = subValueMax `div` 2
     | otherwise =
-        subValueMax - 1 - round ((v - lo) / (hi - lo) * fromIntegral (subValueMax - 1))
+        subValueMax
+          - 1
+          - round
+            ( (v - lo)
+                / (hi - lo)
+                * fromIntegral (subValueMax - 1)
+            )
   points =
-    [ if indexAlongX then (toSubIndex i, toSubValue v) else (toSubValue v, toSubIndex i)
+    [ if indexAlongX
+        then (toSubIndex i, toSubValue v)
+        else (toSubValue v, toSubIndex i)
     | (i, v) <- zip [0 :: Int ..] vals
     ]
   allDots = concatMap (uncurry lineDots) (zip points (drop 1 points))
@@ -254,19 +325,29 @@ drawLine left top width height indexAlongX vals
       | (px, py) <- allDots
       ]
 
--- | Every sub-pixel dot on the straight line between two points, one per
--- sub-column crossed - plenty for the handful of sub-pixels a terminal
--- panel actually has.
+{- | Every sub-pixel dot on the straight line between two points, one per
+sub-column crossed - plenty for the handful of sub-pixels a terminal
+panel actually has.
+-}
 lineDots :: (Int, Int) -> (Int, Int) -> [(Int, Int)]
 lineDots (x0, y0) (x1, y1)
   | x0 == x1 = [(x0, y) | y <- [min y0 y1 .. max y0 y1]]
   | otherwise =
-      [ (x, y0 + round (fromIntegral (x - x0) / fromIntegral (x1 - x0) * fromIntegral (y1 - y0) :: Double))
+      [ ( x
+        , y0
+            + round
+              ( fromIntegral (x - x0)
+                  / fromIntegral (x1 - x0)
+                  * fromIntegral (y1 - y0) ::
+                  Double
+              )
+        )
       | x <- [min x0 x1 .. max x0 x1]
       ]
 
--- | The Unicode braille pattern's dot-to-bit mapping, a 2 (sub-x) by 4
--- (sub-y) grid within one character cell.
+{- | The Unicode braille pattern's dot-to-bit mapping, a 2 (sub-x) by 4
+(sub-y) grid within one character cell.
+-}
 brailleBit :: Int -> Int -> Int
 brailleBit 0 0 = 0x01
 brailleBit 0 1 = 0x02

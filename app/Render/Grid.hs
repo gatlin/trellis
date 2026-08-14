@@ -19,6 +19,7 @@ import qualified Data.Map.Strict as Map
 import Formula (Value (..), blank, evaluated, renderExpr, showValue, window)
 import Render.Chart (renderChart)
 import Render.Editor (renderEditor)
+import Render.Pivot (renderPivot)
 import Render.Theme (
   fillBg,
   fillFg,
@@ -99,6 +100,7 @@ render st = do
     (heatmapColors st)
     vals
   renderChart st
+  renderPivot st
   renderFooter st h
 
 {- | Per-cell colors for an active heatmap, or 'Nothing' when no heatmap is
@@ -114,7 +116,9 @@ heatmapColors st = case chart st of
         -- \| 'window' over-fetches by one in each direction (its other
         -- callers all trim the same way) - trimmed back down here.
         vals =
-          map (take cols) (take rows (window (x0, y0) cols rows (evaluated (cells st))))
+          map
+            (take cols)
+            (take rows (window (x0, y0) cols rows (evaluated (cells st))))
         cellVals =
           [ ((x0 + cx, y0 + cy), v)
           | (cy, row) <- zip [0 ..] vals
@@ -135,24 +139,47 @@ heatmapColors st = case chart st of
   _ -> Nothing
 
 renderColumnHeaders :: Geometry -> UI.Screen ()
-renderColumnHeaders Geometry{geoOx = ox, geoCx = cx, geoCw = cw, geoCols = cols} =
-  forM_ [0 .. cols - 1] $ \i ->
-    let (fg, bg) = if ox + i == cx then (focusFg, focusBg) else (textFg, textBg)
-     in UI.drawText (gutterWidth + i * cw) 0 fg bg (padTo (cw - 1) (show (ox + i)))
+renderColumnHeaders
+  Geometry
+    { geoOx = ox
+    , geoCx = cx
+    , geoCw = cw
+    , geoCols = cols
+    } =
+    forM_ [0 .. cols - 1] $ \i ->
+      let (fg, bg) =
+            if ox + i == cx then (focusFg, focusBg) else (textFg, textBg)
+       in UI.drawText
+            (gutterWidth + i * cw)
+            0
+            fg
+            bg
+            (padTo (cw - 1) (show (ox + i)))
 
 renderGridLines :: Geometry -> UI.Screen ()
-renderGridLines Geometry{geoRs = rs, geoRows = rows, geoBoundaries = boundaries} = do
-  let nb = length boundaries
-  forM_ [0 .. rows] $ \j -> do
-    let y = headerHeight + j * rs
-    UI.drawHLine y (minimum boundaries) (maximum boundaries) gridFg gridBg 0x2500
-    forM_ (zip [0 ..] boundaries) $ \(i, x) ->
-      UI.drawGlyph
-        x
+renderGridLines
+  Geometry
+    { geoRs = rs
+    , geoRows = rows
+    , geoBoundaries = boundaries
+    } = do
+    let nb = length boundaries
+    forM_ [0 .. rows] $ \j -> do
+      let y = headerHeight + j * rs
+      UI.drawHLine
         y
+        (minimum boundaries)
+        (maximum boundaries)
         gridFg
         gridBg
-        (joinGlyph (j > 0) (j < rows) (i > 0) (i < nb - 1))
+        0x2500
+      forM_ (zip [0 ..] boundaries) $ \(i, x) ->
+        UI.drawGlyph
+          x
+          y
+          gridFg
+          gridBg
+          (joinGlyph (j > 0) (j < rows) (i > 0) (i < nb - 1))
 
 renderCells ::
   Geometry ->
@@ -185,10 +212,17 @@ renderCells
       let sheetRow = oy + rowIx
           screenRow = headerHeight + rowIx * rs + 1
           bottomRow = headerHeight + (rowIx + 1) * rs - 1
-          (rowFg, rowBg) = if sheetRow == cy then (focusFg, focusBg) else (textFg, textBg)
-      UI.drawText 0 screenRow rowFg rowBg (padTo (gutterWidth - 1) (show sheetRow))
+          (rowFg, rowBg) =
+            if sheetRow == cy then (focusFg, focusBg) else (textFg, textBg)
+      UI.drawText
+        0
+        screenRow
+        rowFg
+        rowBg
+        (padTo (gutterWidth - 1) (show sheetRow))
       -- [^1]
-      forM_ boundaries $ \x -> UI.drawVLine x screenRow bottomRow gridFg gridBg 0x2502
+      forM_ boundaries $ \x ->
+        UI.drawVLine x screenRow bottomRow gridFg gridBg 0x2502
       forM_ (zip [0 ..] (take cols rowVals)) $ \(colIx, val) -> do
         let sheetCol = ox + colIx
             focused = (sheetCol, sheetRow) == (cx, cy)
@@ -218,7 +252,12 @@ renderCells
         -- rows 'rowStride' adds at higher zoom, so a focused cell's
         -- highlight fills the whole cell block, not just its content line.
         forM_ [screenRow + 1 .. bottomRow] $ \padRow ->
-          UI.drawText (gutterWidth + colIx * cw) padRow fg bg (padTo (cw - 1) "")
+          UI.drawText
+            (gutterWidth + colIx * cw)
+            padRow
+            fg
+            bg
+            (padTo (cw - 1) "")
 
 -- | Is a cell within the rectangle a fill drag's two corners span?
 inRange :: (Int, Int) -> ((Int, Int), (Int, Int)) -> Bool

@@ -27,13 +27,13 @@ import SheetState (LiveBinding (..), SheetState (..))
 
 -- | One line's worth of a sheet file, once parsed.
 data FileEntry
-  = CellEntry (Int, Int) String
-  {- ^ A cell's own typed text - could be a formula or a "!"-prefixed
-  live spec, undecided here; telling them apart needs
-  'Live.parseLiveSpec' and 'Parser.parseExpr', and declaring a live
-  spec needs an 'Trellis.Orc.Group' to run it under, neither available
-  to this pure module - see "Main" for where that actually happens.
-  -}
+  = {- | A cell's own typed text - could be a formula or a "!"-prefixed
+    live spec, undecided here; telling them apart needs
+    'Live.parseLiveSpec' and 'Parser.parseExpr', and declaring a live
+    spec needs an 'Trellis.Orc.Group' to run it under, neither available
+    to this pure module - see "Main" for where that actually happens.
+    -}
+    CellEntry (Int, Int) String
   | OutEntry (Int, Int) FilePath
   deriving (Eq, Show)
 
@@ -51,17 +51,22 @@ parseSheetFile text = foldr step ([], []) (zip [1 :: Int ..] (lines text))
     | otherwise = case parseLine ln of
         Just entry -> (warnings, entry : entries)
         Nothing ->
-          (("line " ++ show lineNo ++ ": malformed: " ++ raw) : warnings, entries)
+          ( ("line " ++ show lineNo ++ ": malformed: " ++ raw)
+              : warnings
+          , entries
+          )
    where
     ln = trim raw
 
--- | An @OUT@-prefixed line, or an ordinary cell line - both are just
--- 'Cli.parseCoordPath', which already keeps everything after the
--- *first* @=@ as the value, so a formula\/path containing its own
--- @=@ still round-trips.
+{- | An @OUT@-prefixed line, or an ordinary cell line - both are just
+'Cli.parseCoordPath', which already keeps everything after the
+*first* @=@ as the value, so a formula\/path containing its own
+@=@ still round-trips.
+-}
 parseLine :: String -> Maybe FileEntry
 parseLine ln
-  | Just rest <- stripPrefix "OUT " ln = uncurry OutEntry <$> parseCoordPath rest
+  | Just rest <- stripPrefix "OUT " ln =
+      uncurry OutEntry <$> parseCoordPath rest
   | otherwise = uncurry CellEntry <$> parseCoordPath ln
 
 trim :: String -> String
@@ -81,7 +86,8 @@ serialize st =
          | (pos, path) <- Map.toList (outBindings st)
          ]
  where
-  cellPositions = sort (nub (Map.keys (cells st) ++ Map.keys (subscriptions st)))
+  cellPositions =
+    sort (nub (Map.keys (cells st) ++ Map.keys (subscriptions st)))
   -- \| Live spec text if subscribed, its rendered formula otherwise -
   -- the same check 'Update.Subscriptions.existingText' does, kept
   -- local here rather than imported (see the module doc above).

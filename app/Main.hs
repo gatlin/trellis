@@ -6,7 +6,12 @@ import Control.Exception (IOException, finally, try)
 import Control.Monad (forM, void)
 import qualified Data.Map.Strict as Map
 import Keymap (loadKeyMap)
-import Live (LiveSpec (TailFile), declareOutBinding, declareSubscription, parseLiveSpec)
+import Live (
+  LiveSpec (TailFile),
+  declareOutBinding,
+  declareSubscription,
+  parseLiveSpec,
+ )
 import Parser (parseExpr)
 import Render (render, sheetOutputMode)
 import SheetFile (FileEntry (..), parseSheetFile)
@@ -48,7 +53,11 @@ run opts = do
           , Right expr <- [parseExpr text]
           ]
   fileSubs <-
-    forM [(pos, spec, text) | (pos, text) <- fileCellLines, Just spec <- [parseLiveSpec text]] $
+    forM
+      [ (pos, spec, text)
+      | (pos, text) <- fileCellLines
+      , Just spec <- [parseLiveSpec text]
+      ] $
       \(pos, spec, text) -> do
         grp <- declareSubscription root mailbox pos spec
         return (pos, LiveBinding grp text)
@@ -66,7 +75,11 @@ run opts = do
   UI.mount
     id
     setup
-    (UI.activity (update keymap root mailbox (fileOutHandles ++ cliOutHandles) (cliFile opts)) render st0)
+    ( UI.activity
+        (update keymap root mailbox (fileOutHandles ++ cliOutHandles) (cliFile opts))
+        render
+        st0
+    )
     `finally` teardown root
  where
   setup = do
@@ -96,7 +109,8 @@ loadFileEntries (Just path) = do
   case result of
     Left e
       | isDoesNotExistError e -> return []
-      | otherwise -> hPutStrLn stderr ("trellis: " ++ path ++ ": " ++ show e) >> exitFailure
+      | otherwise ->
+          hPutStrLn stderr ("trellis: " ++ path ++ ": " ++ show e) >> exitFailure
     Right txt -> do
       let (warnings, entries) = parseSheetFile txt
       mapM_ (\w -> hPutStrLn stderr ("trellis: " ++ path ++ ": " ++ w)) warnings

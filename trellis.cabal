@@ -73,11 +73,12 @@ executable trellis
     -- but not reusable machinery themselves - so unlike src/Trellis, they
     -- live here.
     other-modules:    SheetState, SheetState.Geometry, SheetState.Fill,
-                      SheetState.Chart,
+                      SheetState.Chart, SheetState.Pivot,
                       Render, Render.Theme, Render.Editor, Render.Grid,
-                      Render.Chart,
+                      Render.Chart, Render.Pivot,
                       Update, Update.Events, Update.Buffer, Update.Navigation,
-                      Update.Subscriptions, Update.Fill, Update.Chart, Update.Core,
+                      Update.Subscriptions, Update.Fill, Update.Chart, Update.Pivot,
+                      Update.Core,
                       Formula, Formula.Builtins, Parser, Keymap, Live, Live.In,
                       Live.Out, Cli, SheetFile
 
@@ -108,11 +109,12 @@ test-suite trellis-test
     other-modules:    SheetStateSpec, FormulaSpec, UpdateSpec, LiveSpec, CliSpec,
                       SheetFileSpec,
                       SheetState, SheetState.Geometry, SheetState.Fill,
-                      SheetState.Chart,
+                      SheetState.Chart, SheetState.Pivot,
                       Formula, Formula.Builtins, Parser, Keymap, Live, Live.In,
                       Live.Out, Cli, SheetFile,
                       Update, Update.Events, Update.Buffer, Update.Navigation,
-                      Update.Subscriptions, Update.Fill, Update.Chart, Update.Core
+                      Update.Subscriptions, Update.Fill, Update.Chart, Update.Pivot,
+                      Update.Core
 
     build-depends:    base,
                       adjunctions,

@@ -4,10 +4,12 @@ import SheetState (
   Chart (..),
   ChartType (..),
   FillSource (..),
+  Pivot (..),
   cellAt,
   clampAxis,
   clampRange,
   classifyChartRange,
+  classifyPivotRange,
   classifySelection,
   heatmapStep,
   previewRect,
@@ -28,6 +30,7 @@ tests =
     , previewRectTests
     , classifyChartRangeTests
     , heatmapStepTests
+    , classifyPivotRangeTests
     ]
 
 clampAxisTests :: TestTree
@@ -153,4 +156,25 @@ heatmapStepTests =
         heatmapStep 5 (0, 10) (-0.001) @?= 0
     , testCase "clamps a value fractionally above the maximum" $
         heatmapStep 5 (0, 10) 10.001 @?= 4
+    ]
+
+classifyPivotRangeTests :: TestTree
+classifyPivotRangeTests =
+  testGroup
+    "classifyPivotRange"
+    [ testCase "no selection never qualifies" $
+        classifyPivotRange Nothing @?= Nothing
+    , testCase "a two-column selection qualifies" $
+        classifyPivotRange (Just ((1, 2), (2, 9)))
+          @?= Just (Pivot ((1, 2), (2, 9)))
+    , testCase "a single-column selection doesn't qualify" $
+        classifyPivotRange (Just ((1, 2), (1, 9))) @?= Nothing
+    , testCase "a three-column selection doesn't qualify" $
+        classifyPivotRange (Just ((1, 2), (3, 9))) @?= Nothing
+    , testCase "a degenerate single-row two-column selection still qualifies" $
+        classifyPivotRange (Just ((1, 5), (2, 5)))
+          @?= Just (Pivot ((1, 5), (2, 5)))
+    , testCase "corners normalize regardless of order" $
+        classifyPivotRange (Just ((2, 9), (1, 2)))
+          @?= Just (Pivot ((1, 2), (2, 9)))
     ]

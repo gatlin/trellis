@@ -14,6 +14,8 @@ module SheetState (
   Chart (..),
   classifyChartRange,
   heatmapStep,
+  Pivot (..),
+  classifyPivotRange,
   initialState,
   doubleClickWindow,
   gutterWidth,
@@ -59,6 +61,7 @@ import SheetState.Geometry (
   visibleCols,
   visibleRows,
  )
+import SheetState.Pivot (Pivot (..), classifyPivotRange)
 import qualified Trellis.Orc as Orc
 import qualified Trellis.UI as UI
 
@@ -115,6 +118,11 @@ data SheetState = SheetState
   none is showing. Unlike 'editor', doesn't suspend navigation - see
   'Update.Chart.toggleChart'.
   -}
+  , pivot :: Maybe Pivot
+  {- ^ An open pivot-table summary over the last 'selection' made, or
+  'Nothing' when none is showing. Same lifecycle as 'chart' - doesn't
+  suspend navigation, cleared by @cancel@. See 'Update.Pivot.togglePivot'.
+  -}
   }
 
 {- | A cell bound to a live\/async source: the 'Trellis.Orc' subscription
@@ -155,6 +163,7 @@ initialState =
     Nothing
     Map.empty
     Map.empty
+    Nothing
     Nothing
     Nothing
     Nothing

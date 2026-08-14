@@ -13,14 +13,14 @@ module SheetState.Fill (
 -- | What a fillButton drag is replicating.
 data FillSource
   = FillCell (Int, Int)
-  | FillRow Int (Int, Int)
-  {- ^ A fixed row and the @(xMin, xMax)@ columns of the selection that
-  sits on it.
-  -}
-  | FillCol Int (Int, Int)
-  {- ^ A fixed column and the @(yMin, yMax)@ rows of the selection that
-  sits on it.
-  -}
+  | {- | A fixed row and the @(xMin, xMax)@ columns of the selection that
+    sits on it.
+    -}
+    FillRow Int (Int, Int)
+  | {- | A fixed column and the @(yMin, yMax)@ rows of the selection that
+    sits on it.
+    -}
+    FillCol Int (Int, Int)
   deriving (Eq, Show)
 
 {- | What a fillButton press at @target@ should replicate, given the
