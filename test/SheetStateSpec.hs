@@ -1,11 +1,15 @@
 module SheetStateSpec (tests) where
 
 import SheetState (
+  Chart (..),
+  ChartType (..),
   FillSource (..),
   cellAt,
   clampAxis,
   clampRange,
+  classifyChartRange,
   classifySelection,
+  heatmapStep,
   previewRect,
  )
 import Test.Tasty (TestTree, testGroup)
@@ -22,6 +26,8 @@ tests =
     , clampRangeTests
     , classifySelectionTests
     , previewRectTests
+    , classifyChartRangeTests
+    , heatmapStepTests
     ]
 
 clampAxisTests :: TestTree
@@ -101,4 +107,50 @@ previewRectTests =
         previewRect (FillRow 5 (1, 4)) (9, 8) @?= ((1, 5), (4, 8))
     , testCase "a column source spans its full height, out to the current column" $
         previewRect (FillCol 5 (1, 4)) (8, 9) @?= ((5, 1), (8, 4))
+    ]
+
+classifyChartRangeTests :: TestTree
+classifyChartRangeTests =
+  testGroup
+    "classifyChartRange"
+    [ testCase "no selection never qualifies, for any type" $ do
+        classifyChartRange BarChart Nothing @?= Nothing
+        classifyChartRange Heatmap Nothing @?= Nothing
+    , testCase "BarChart accepts a row selection" $
+        classifyChartRange BarChart (Just ((1, 5), (4, 5)))
+          @?= Just (Chart BarChart ((1, 5), (4, 5)))
+    , testCase "LineChart accepts a column selection" $
+        classifyChartRange LineChart (Just ((3, 0), (3, 6)))
+          @?= Just (Chart LineChart ((3, 0), (3, 6)))
+    , testCase "BarChart accepts a degenerate 1x1 selection" $
+        classifyChartRange BarChart (Just ((2, 2), (2, 2)))
+          @?= Just (Chart BarChart ((2, 2), (2, 2)))
+    , testCase "BarChart rejects a genuine 2D block" $
+        classifyChartRange BarChart (Just ((0, 0), (2, 2))) @?= Nothing
+    , testCase "LineChart rejects a genuine 2D block" $
+        classifyChartRange LineChart (Just ((0, 0), (2, 2))) @?= Nothing
+    , testCase "Heatmap accepts a genuine 2D block" $
+        classifyChartRange Heatmap (Just ((0, 0), (2, 2)))
+          @?= Just (Chart Heatmap ((0, 0), (2, 2)))
+    , testCase "Heatmap accepts a row selection too" $
+        classifyChartRange Heatmap (Just ((1, 5), (4, 5)))
+          @?= Just (Chart Heatmap ((1, 5), (4, 5)))
+    , testCase "corners normalize regardless of order" $
+        classifyChartRange BarChart (Just ((4, 5), (1, 5)))
+          @?= Just (Chart BarChart ((1, 5), (4, 5)))
+    ]
+
+heatmapStepTests :: TestTree
+heatmapStepTests =
+  testGroup
+    "heatmapStep"
+    [ testCase "the minimum maps to step 0" $ heatmapStep 5 (0, 10) 0 @?= 0
+    , testCase "the maximum maps to the last step" $ heatmapStep 5 (0, 10) 10 @?= 4
+    , testCase "the midpoint maps to the middle step" $ heatmapStep 5 (0, 10) 5 @?= 2
+    , testCase "a degenerate range (min == max) maps to the middle step" $
+        heatmapStep 5 (3, 3) 3 @?= 2
+    , testCase "clamps a value fractionally below the minimum" $
+        heatmapStep 5 (0, 10) (-0.001) @?= 0
+    , testCase "clamps a value fractionally above the maximum" $
+        heatmapStep 5 (0, 10) 10.001 @?= 4
     ]

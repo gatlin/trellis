@@ -16,8 +16,16 @@ ref      ::= '\@' int ',' int
 call     ::= 'IF' '(' expr ',' expr ',' expr ')'
            | 'AND' '(' expr ',' expr ')' | 'OR' '(' expr ',' expr ')'
            | 'NOT' '(' expr ')' | 'STR' '(' expr ')' | 'NUM' '(' expr ')'
+           | fn1 '(' expr ')' | fn2 '(' expr ',' expr ')'
+           | fn3 '(' expr ',' expr ',' expr ')'
            | agg '(' range ')'
-agg      ::= 'SUM' | 'AVERAGE' | 'COUNT' | 'MIN' | 'MAX'
+fn1      ::= 'ABS' | 'SQRT' | 'LOG' | 'LN' | 'EXP' | 'SIGN' | 'INT' | 'TRUNC'
+           | 'CEILING' | 'FLOOR' | 'LEN' | 'UPPER' | 'LOWER' | 'TRIM'
+fn2      ::= 'MOD' | 'POWER' | 'ROUND' | 'ROUNDUP' | 'ROUNDDOWN'
+           | 'LEFT' | 'RIGHT' | 'FIND' | 'REPT'
+fn3      ::= 'MID' | 'SUBSTITUTE'
+agg      ::= 'SUM' | 'AVERAGE' | 'COUNT' | 'COUNTA' | 'MIN' | 'MAX'
+           | 'PRODUCT' | 'MEDIAN' | 'VAR' | 'STDEV'
 range    ::= '\@' int ',' int (':' int ',' int)?
 @
 
@@ -32,7 +40,16 @@ module Parser (parseExpr) where
 import Control.Applicative ((<|>))
 import Data.Attoparsec.Text
 import qualified Data.Text as T
-import Formula (AggOp (..), CompareOp (..), Expr (..), ExprF (..), Op (..))
+import Formula (
+  AggOp (..),
+  CompareOp (..),
+  Expr (..),
+  ExprF (..),
+  Fn1Op (..),
+  Fn2Op (..),
+  Fn3Op (..),
+  Op (..),
+ )
 
 parseExpr :: String -> Either String Expr
 parseExpr =
@@ -149,7 +166,49 @@ parensP = char '(' *> skipSpace *> compareP <* skipSpace <* char ')'
 
 callP :: Parser Expr
 callP =
-  choice [ifP, andP, orP, notP, strP, numP, sumP, avgP, countP, minP, maxP]
+  choice
+    [ ifP
+    , andP
+    , orP
+    , notP
+    , strP
+    , numP
+    , sumP
+    , avgP
+    , countaP
+    , countP
+    , minP
+    , maxP
+    , productP
+    , medianP
+    , varP
+    , stdevP
+    , absP
+    , sqrtP
+    , logP
+    , lnP
+    , expP
+    , signP
+    , truncP
+    , intP
+    , ceilingP
+    , floorP
+    , lenP
+    , upperP
+    , lowerP
+    , trimP
+    , modP
+    , powerP
+    , roundUpP
+    , roundDownP
+    , roundP
+    , leftP
+    , rightP
+    , findP
+    , reptP
+    , midP
+    , substituteP
+    ]
 
 ifP :: Parser Expr
 ifP = do
@@ -169,12 +228,20 @@ notP = mk1 "NOT" (Expr . NotF)
 strP = mk1 "STR" (Expr . ToStringF)
 numP = mk1 "NUM" (Expr . ToNumberF)
 
-sumP, avgP, countP, minP, maxP :: Parser Expr
+sumP, avgP, countP, minP, maxP, productP, medianP, varP, stdevP, countaP :: Parser Expr
 sumP = aggCallP "SUM" SumOp
 avgP = aggCallP "AVERAGE" AvgOp
 countP = aggCallP "COUNT" CountOp
 minP = aggCallP "MIN" MinOp
 maxP = aggCallP "MAX" MaxOp
+productP = aggCallP "PRODUCT" ProductOp
+medianP = aggCallP "MEDIAN" MedianOp
+varP = aggCallP "VAR" VarOp
+stdevP = aggCallP "STDEV" StdevOp
+-- \| Ordered before 'countP' in 'callP' - "COUNT" is a strict prefix of
+-- "COUNTA", though attoparsec's backtracking means the order doesn't
+-- actually matter (see [^2]).
+countaP = aggCallP "COUNTA" CountAOp
 
 -- | An aggregate-function call: @NAME(range)@, fixed single-range arity.
 aggCallP :: T.Text -> AggOp -> Parser Expr
@@ -188,6 +255,44 @@ aggCallP name op = do
   _ <- char ')'
   pure (Expr (RangeF op start end))
 
+-- | The fourteen one-argument math\/string built-ins: @NAME(expr)@.
+absP, sqrtP, logP, lnP, expP, signP, intP, truncP, ceilingP, floorP :: Parser Expr
+lenP, upperP, lowerP, trimP :: Parser Expr
+absP = mk1 "ABS" (\a -> Expr (Call1F AbsOp a))
+sqrtP = mk1 "SQRT" (\a -> Expr (Call1F SqrtOp a))
+logP = mk1 "LOG" (\a -> Expr (Call1F LogOp a))
+lnP = mk1 "LN" (\a -> Expr (Call1F LnOp a))
+expP = mk1 "EXP" (\a -> Expr (Call1F ExpOp a))
+signP = mk1 "SIGN" (\a -> Expr (Call1F SignOp a))
+intP = mk1 "INT" (\a -> Expr (Call1F IntOp a))
+truncP = mk1 "TRUNC" (\a -> Expr (Call1F TruncOp a))
+ceilingP = mk1 "CEILING" (\a -> Expr (Call1F CeilingOp a))
+floorP = mk1 "FLOOR" (\a -> Expr (Call1F FloorOp a))
+lenP = mk1 "LEN" (\a -> Expr (Call1F LenOp a))
+upperP = mk1 "UPPER" (\a -> Expr (Call1F UpperOp a))
+lowerP = mk1 "LOWER" (\a -> Expr (Call1F LowerOp a))
+trimP = mk1 "TRIM" (\a -> Expr (Call1F TrimOp a))
+
+-- | The nine two-argument math\/string built-ins: @NAME(expr, expr)@.
+modP, powerP, roundP, roundUpP, roundDownP :: Parser Expr
+leftP, rightP, findP, reptP :: Parser Expr
+modP = mk2 "MOD" (\a b -> Expr (Call2F ModOp a b))
+powerP = mk2 "POWER" (\a b -> Expr (Call2F PowerOp a b))
+-- \| Ordered before 'roundP' in 'callP' - "ROUND" is a strict prefix of
+-- both, same reasoning as 'countaP' above.
+roundUpP = mk2 "ROUNDUP" (\a b -> Expr (Call2F RoundUpOp a b))
+roundDownP = mk2 "ROUNDDOWN" (\a b -> Expr (Call2F RoundDownOp a b))
+roundP = mk2 "ROUND" (\a b -> Expr (Call2F RoundOp a b))
+leftP = mk2 "LEFT" (\a b -> Expr (Call2F LeftOp a b))
+rightP = mk2 "RIGHT" (\a b -> Expr (Call2F RightOp a b))
+findP = mk2 "FIND" (\a b -> Expr (Call2F FindOp a b))
+reptP = mk2 "REPT" (\a b -> Expr (Call2F ReptOp a b))
+
+-- | The two three-argument string built-ins: @NAME(expr, expr, expr)@.
+midP, substituteP :: Parser Expr
+midP = mk3 "MID" (\a b c -> Expr (Call3F MidOp a b c))
+substituteP = mk3 "SUBSTITUTE" (\a b c -> Expr (Call3F SubstituteOp a b c))
+
 -- | A one-argument built-in: @NAME(expr)@.
 mk1 :: T.Text -> (Expr -> Expr) -> Parser Expr
 mk1 name build = build <$> (string name *> arg1Close)
@@ -199,6 +304,16 @@ mk2 name build = do
   a <- arg1
   _ <- comma
   build a <$> argClose
+
+-- | A three-argument built-in: @NAME(expr, expr, expr)@.
+mk3 :: T.Text -> (Expr -> Expr -> Expr -> Expr) -> Parser Expr
+mk3 name build = do
+  _ <- string name
+  a <- arg1
+  _ <- comma
+  b <- arg
+  _ <- comma
+  build a b <$> argClose
 
 comma :: Parser ()
 comma = skipSpace *> char ',' *> skipSpace

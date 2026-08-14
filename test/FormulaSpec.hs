@@ -42,8 +42,12 @@ tests =
     , blankTests
     , parseFailureTests
     , rangeTests
+    , mathFnTests
+    , stringFnTests
+    , extendedAggregateTests
     , adjustRefsTests
     , roundTripTests
+    , prefixCollisionTests
     ]
 
 arithmeticTests :: TestTree
@@ -125,6 +129,13 @@ numAt pos n = (pos, Expr (NumLitF n))
 strAt :: (Int, Int) -> String -> ((Int, Int), Expr)
 strAt pos s = (pos, Expr (StrLitF s))
 
+boolAt :: (Int, Int) -> Bool -> ((Int, Int), Expr)
+boolAt pos b = (pos, Expr (BoolLitF b))
+
+-- | A cell whose formula evaluates to a 'VErr', for testing error propagation.
+errAt :: (Int, Int) -> ((Int, Int), Expr)
+errAt pos = (pos, Expr (ToNumberF (Expr (StrLitF "abc"))))
+
 rangeTests :: TestTree
 rangeTests =
   testGroup
@@ -159,6 +170,84 @@ rangeTests =
  where
   grid = Map.fromList [numAt (0, 0) 1, numAt (1, 0) 2, numAt (0, 1) 3, numAt (1, 1) 4]
   mixedGrid = Map.fromList [numAt (0, 0) 1, strAt (1, 0) "x", numAt (0, 1) 3, numAt (1, 1) 4]
+
+mathFnTests :: TestTree
+mathFnTests =
+  testGroup
+    "math built-ins"
+    [ testCase "ABS" $ eval "ABS(-5)" @?= VNum 5
+    , testCase "SQRT" $ eval "SQRT(16)" @?= VNum 4
+    , testCase "SQRT of a negative number is an error" $
+        assertBool "expected a VErr" (isErr (eval "SQRT(-1)"))
+    , testCase "LOG is base 10" $ eval "LOG(100)" @?= VNum 2
+    , testCase "LOG of a non-positive number is an error" $
+        assertBool "expected a VErr" (isErr (eval "LOG(-1)"))
+    , testCase "LN" $ eval "LN(1)" @?= VNum 0
+    , testCase "EXP" $ eval "EXP(0)" @?= VNum 1
+    , testCase "SIGN" $ eval "SIGN(-7)" @?= VNum (-1)
+    , testCase "INT floors toward negative infinity" $ eval "INT(-3.5)" @?= VNum (-4)
+    , testCase "TRUNC truncates toward zero" $ eval "TRUNC(-3.5)" @?= VNum (-3)
+    , testCase "CEILING" $ eval "CEILING(3.2)" @?= VNum 4
+    , testCase "FLOOR" $ eval "FLOOR(3.8)" @?= VNum 3
+    , testCase "MOD" $ eval "MOD(7,3)" @?= VNum 1
+    , testCase "MOD's sign follows the divisor" $ eval "MOD(-7,3)" @?= VNum 2
+    , testCase "MOD by zero is an error" $ eval "MOD(7,0)" @?= VErr "#DIV/0!"
+    , testCase "POWER" $ eval "POWER(2,10)" @?= VNum 1024
+    , testCase "ROUND is half-away-from-zero, not half-to-even" $
+        eval "ROUND(2.5,0)" @?= VNum 3
+    , testCase "ROUND away from zero on the negative side too" $
+        eval "ROUND(-2.5,0)" @?= VNum (-3)
+    , testCase "ROUNDUP always rounds away from zero" $ eval "ROUNDUP(2.1,0)" @?= VNum 3
+    , testCase "ROUNDDOWN always truncates toward zero" $
+        eval "ROUNDDOWN(2.9,0)" @?= VNum 2
+    ]
+
+stringFnTests :: TestTree
+stringFnTests =
+  testGroup
+    "string built-ins"
+    [ testCase "LEN" $ eval "LEN(\"hello\")" @?= VNum 5
+    , testCase "UPPER" $ eval "UPPER(\"hello\")" @?= VStr "HELLO"
+    , testCase "LOWER" $ eval "LOWER(\"HELLO\")" @?= VStr "hello"
+    , testCase "TRIM strips ends and collapses internal runs" $
+        eval "TRIM(\"  a   b  \")" @?= VStr "a b"
+    , testCase "LEFT" $ eval "LEFT(\"hello\",3)" @?= VStr "hel"
+    , testCase "RIGHT" $ eval "RIGHT(\"hello\",3)" @?= VStr "llo"
+    , testCase "MID" $ eval "MID(\"hello\",2,3)" @?= VStr "ell"
+    , testCase "FIND returns a 1-based position" $
+        eval "FIND(\"lo\",\"hello\")" @?= VNum 4
+    , testCase "FIND is an error when not found" $
+        assertBool "expected a VErr" (isErr (eval "FIND(\"xyz\",\"hello\")"))
+    , testCase "SUBSTITUTE replaces every occurrence" $
+        eval "SUBSTITUTE(\"hello world\",\"o\",\"0\")" @?= VStr "hell0 w0rld"
+    , testCase "REPT" $ eval "REPT(\"ab\",3)" @?= VStr "ababab"
+    ]
+
+extendedAggregateTests :: TestTree
+extendedAggregateTests =
+  testGroup
+    "extended aggregates"
+    [ testCase "PRODUCT" $ evalFormula grid "PRODUCT(@0,0:3,0)" @?= VNum 24
+    , testCase "PRODUCT of an all-blank range is 1" $
+        evalFormula grid "PRODUCT(@9,9:10,10)" @?= VNum 1
+    , testCase "MEDIAN of an even count averages the middle two" $
+        evalFormula grid "MEDIAN(@0,0:3,0)" @?= VNum 2.5
+    , testCase "MEDIAN of an empty range is an error" $
+        assertBool "expected a VErr" (isErr (evalFormula grid "MEDIAN(@9,9:10,10)"))
+    , testCase "VAR" $ evalFormula grid "VAR(@0,0:3,0)" @?= VNum 1.25
+    , testCase "VAR of an empty range is an error" $
+        assertBool "expected a VErr" (isErr (evalFormula grid "VAR(@9,9:10,10)"))
+    , testCase "STDEV is the square root of VAR" $
+        evalFormula grid "STDEV(@0,0:3,0)" @?= VNum (sqrt 1.25)
+    , testCase "COUNTA counts non-blank cells of any type" $
+        evalFormula mixedTypeGrid "COUNTA(@0,0:3,0)" @?= VNum 3
+    , testCase "COUNTA still propagates a VErr" $
+        assertBool "expected a VErr" (isErr (evalFormula errGrid "COUNTA(@0,0:1,0)"))
+    ]
+ where
+  grid = Map.fromList [numAt (0, 0) 1, numAt (1, 0) 2, numAt (2, 0) 3, numAt (3, 0) 4]
+  mixedTypeGrid = Map.fromList [numAt (0, 0) 1, strAt (1, 0) "x", boolAt (2, 0) True]
+  errGrid = Map.fromList [numAt (0, 0) 1, errAt (1, 0)]
 
 adjustRefsTests :: TestTree
 adjustRefsTests =
@@ -197,12 +286,31 @@ roundTripTests =
     , "COUNT(@0,0:3,2)"
     , "MIN(@0,0:3,2)"
     , "MAX(@0,0:3,2)"
+    , "ROUND(2.5,0)"
+    , "MID(\"hello\",2,3)"
+    , "SUBSTITUTE(\"a\",\"b\",\"c\")"
     ]
   roundTrips src = case parseExpr src of
     Left err -> assertBool ("failed to parse " ++ src ++ ": " ++ err) False
     Right expr1 -> case parseExpr (renderExpr expr1) of
       Left err -> assertBool ("re-parsing rendered " ++ src ++ " failed: " ++ err) False
       Right expr2 -> expr1 @?= expr2
+
+{- | 'COUNT' is a strict prefix of 'COUNTA', and 'ROUND' of 'ROUNDUP'\/
+'ROUNDDOWN' - confirms attoparsec's backtracking resolves these
+correctly regardless of 'callP's own ordering (see "Parser"'s [^2]).
+-}
+prefixCollisionTests :: TestTree
+prefixCollisionTests =
+  testGroup
+    "prefix-colliding built-in names"
+    [ testCase "COUNTA doesn't get cut short as COUNT" $
+        evalFormula (Map.fromList [strAt (0, 0) "x"]) "COUNTA(@0,0)" @?= VNum 1
+    , testCase "ROUNDUP doesn't get cut short as ROUND" $
+        eval "ROUNDUP(2.1,0)" @?= VNum 3
+    , testCase "ROUNDDOWN doesn't get cut short as ROUND" $
+        eval "ROUNDDOWN(2.9,0)" @?= VNum 2
+    ]
 
 {- [^1]:
 Regression test for a mid-epic-1 correction: an earlier version of the

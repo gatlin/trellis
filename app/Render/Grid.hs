@@ -17,6 +17,7 @@ module Render.Grid (
 import Control.Monad (forM_, when)
 import qualified Data.Map.Strict as Map
 import Formula (Value (..), blank, evaluated, renderExpr, showValue, window)
+import Render.Chart (renderChart)
 import Render.Editor (renderEditor)
 import Render.Theme (
   fillBg,
@@ -25,6 +26,7 @@ import Render.Theme (
   focusFg,
   gridBg,
   gridFg,
+  heatmapRamp,
   liveBg,
   liveFg,
   outBg,
@@ -36,16 +38,20 @@ import Render.Theme (
   textFg,
  )
 import SheetState (
+  Chart (..),
+  ChartType (..),
   LiveBinding,
   SheetState (..),
   colBoundaries,
   gutterWidth,
   headerHeight,
+  heatmapStep,
   previewRect,
   rowStride,
   visibleCols,
   visibleRows,
  )
+import qualified Termbox2 as Tb2
 import qualified Trellis.UI as UI
 
 {- | Layout shared across a frame's render passes, computed once so each
@@ -84,8 +90,49 @@ render st = do
       fillPreview = fmap (uncurry previewRect) (fillDrag st)
   renderColumnHeaders geo
   renderGridLines geo
-  renderCells geo (subscriptions st) (outBindings st) (selection st) fillPreview vals
+  renderCells
+    geo
+    (subscriptions st)
+    (outBindings st)
+    (selection st)
+    fillPreview
+    (heatmapColors st)
+    vals
+  renderChart st
   renderFooter st h
+
+{- | Per-cell colors for an active heatmap, or 'Nothing' when no heatmap is
+showing (or its range turned out to have no numeric cells to scale by at
+all - nothing sensible to color by in that case).
+-}
+heatmapColors ::
+  SheetState -> Maybe (Map.Map (Int, Int) (Tb2.Tb2ColorAttr, Tb2.Tb2ColorAttr))
+heatmapColors st = case chart st of
+  Just (Chart Heatmap ((x0, y0), (x1, y1))) ->
+    let cols = x1 - x0 + 1
+        rows = y1 - y0 + 1
+        -- \| 'window' over-fetches by one in each direction (its other
+        -- callers all trim the same way) - trimmed back down here.
+        vals =
+          map (take cols) (take rows (window (x0, y0) cols rows (evaluated (cells st))))
+        cellVals =
+          [ ((x0 + cx, y0 + cy), v)
+          | (cy, row) <- zip [0 ..] vals
+          , (cx, v) <- zip [0 ..] row
+          ]
+        nums = [n | (_, VNum n) <- cellVals]
+     in case nums of
+          [] -> Nothing
+          _ ->
+            let lo = minimum nums
+                hi = maximum nums
+                steps = length heatmapRamp
+             in Just $
+                  Map.fromList
+                    [ (pos, heatmapRamp !! heatmapStep steps (lo, hi) n)
+                    | (pos, VNum n) <- cellVals
+                    ]
+  _ -> Nothing
 
 renderColumnHeaders :: Geometry -> UI.Screen ()
 renderColumnHeaders Geometry{geoOx = ox, geoCx = cx, geoCw = cw, geoCols = cols} =
@@ -113,6 +160,7 @@ renderCells ::
   Map.Map (Int, Int) FilePath ->
   Maybe ((Int, Int), (Int, Int)) ->
   Maybe ((Int, Int), (Int, Int)) ->
+  Maybe (Map.Map (Int, Int) (Tb2.Tb2ColorAttr, Tb2.Tb2ColorAttr)) ->
   [[Value]] ->
   UI.Screen ()
 renderCells
@@ -131,6 +179,7 @@ renderCells
   outs
   sel
   fill
+  heat
   vals =
     forM_ (zip [0 ..] (take rows vals)) $ \(rowIx, rowVals) -> do
       let sheetRow = oy + rowIx
@@ -145,11 +194,16 @@ renderCells
             focused = (sheetCol, sheetRow) == (cx, cy)
             inFill = maybe False (inRange (sheetCol, sheetRow)) fill
             selected = maybe False (inRange (sheetCol, sheetRow)) sel
+            heated = heat >>= Map.lookup (sheetCol, sheetRow)
             live = Map.member (sheetCol, sheetRow) subs
             published = Map.member (sheetCol, sheetRow) outs
             (fg, bg)
               | focused = (focusFg, focusBg)
               | inFill = (fillFg, fillBg)
+              -- \| A heatmap outranks a plain completed selection - it's
+              -- the active visualization that selection is now showing,
+              -- not just a passive "this is what's chosen" marker.
+              | Just heatColors <- heated = heatColors
               | selected = (selectionFg, selectionBg)
               | live = (liveFg, liveBg)
               | published = (outFg, outBg)

@@ -10,6 +10,10 @@ module SheetState (
   FillSource (..),
   classifySelection,
   previewRect,
+  ChartType (..),
+  Chart (..),
+  classifyChartRange,
+  heatmapStep,
   initialState,
   doubleClickWindow,
   gutterWidth,
@@ -31,6 +35,12 @@ module SheetState (
 import qualified Data.Map.Strict as Map
 import Data.Time.Clock (NominalDiffTime, UTCTime)
 import Formula (Expr)
+import SheetState.Chart (
+  Chart (..),
+  ChartType (..),
+  classifyChartRange,
+  heatmapStep,
+ )
 import SheetState.Fill (FillSource (..), classifySelection, previewRect)
 import SheetState.Geometry (
   cellAt,
@@ -100,6 +110,11 @@ data SheetState = SheetState
   right after release, so the next press always starts a fresh one -
   see 'Update.Fill.fillDragTo'.
   -}
+  , chart :: Maybe Chart
+  {- ^ An open chart over the last 'selection' made, or 'Nothing' when
+  none is showing. Unlike 'editor', doesn't suspend navigation - see
+  'Update.Chart.toggleChart'.
+  -}
   }
 
 {- | A cell bound to a live\/async source: the 'Trellis.Orc' subscription
@@ -140,6 +155,7 @@ initialState =
     Nothing
     Map.empty
     Map.empty
+    Nothing
     Nothing
     Nothing
 

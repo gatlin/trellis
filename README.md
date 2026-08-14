@@ -52,9 +52,24 @@ support and 256 colors.
   knot over the grid rather than building a dependency graph.
 * A small typed formula language: numbers, strings, booleans, explicit
   conversion only (`STR`, `NUM`), no implicit coercion between them.
-* Six builtins: `IF`, `AND`, `OR`, `NOT`, `STR`, `NUM`.
+* Range formulas over `@x0,y0:x1,y1` — `SUM`, `AVERAGE`, `COUNT`, `MIN`,
+  `MAX`, `PRODUCT`, `MEDIAN`, `VAR`, `STDEV`, `COUNTA`. A bare `@x,y` is
+  its own 1x1 range.
+* Everything else: `IF`, `AND`, `OR`, `NOT`, `STR`, `NUM`, `ABS`,
+  `SQRT`, `LOG`, `LN`, `EXP`, `SIGN`, `INT`, `TRUNC`, `CEILING`,
+  `FLOOR`, `MOD`, `POWER`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `LEN`,
+  `UPPER`, `LOWER`, `TRIM`, `LEFT`, `RIGHT`, `FIND`, `REPT`, `MID`,
+  `SUBSTITUTE`.
 * Mouse support: click to select or drag, double-click to edit, scroll
-  to zoom, middle-click-drag to pan.
+  to zoom, middle-click-drag to pan, right-click-drag to fill a range
+  with the source cell's formula (references adjusted to match).
+  Drag-select a whole row or column first and a right-click-drag
+  replicates across it instead.
+* Shift+Arrow extends a selection from the keyboard, the same rectangle
+  a mouse drag makes.
+* Charts: select a row, column, or block, then `b`/`l`/`h` toggles a
+  bar, line, or heatmap chart over it. Press the same key again to
+  close it, a different one to switch.
 * Keyboard navigation and a modal formula editor with interior cursor
   movement.
 * Configurable keybindings, read from a plain text config file at
@@ -63,6 +78,28 @@ support and 256 colors.
   command every 5 seconds, becoming its output. `!tail /path/to/fifo`
   streams lines from a file or pipe as they arrive. Either replaces the
   cell's formula, not part of the formula language itself.
+* Sheets save and load to a plain-text file.
+
+# Saving and loading sheets.
+
+```
+trellis mysheet.trellis
+```
+
+opens that file, or — if it doesn't exist yet — starts a blank sheet
+that will become it. `Ctrl+S` writes the sheet back; there's no
+autosave and no save-as, just the one file a session was pointed at.
+The format is one declaration per line, formulas and live specs as
+typed:
+
+```
+0,0=10
+1,0=@0,0+1
+2,0=!5s date
+OUT 3,0=/tmp/status.fifo
+```
+
+plain enough to read, diff, or hand-edit.
 
 # Feeding cells from the command line.
 
@@ -78,6 +115,7 @@ it in by hand. `--out COL,ROW=PATH` watches a cell and writes its value
 to `PATH` every time it changes, in its own background thread, so a
 pipe nobody's reading yet can't hang the sheet. Coordinates use the
 same `(column,row)` order as `@x,y` in a formula, and either flag can
-be repeated for as many cells as you like.
+be repeated for as many cells as you like. Both compose with a sheet
+file given on the same command line.
 
 

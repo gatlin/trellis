@@ -43,18 +43,19 @@ parseArgsTests :: TestTree
 parseArgsTests =
   testGroup
     "parseArgs"
-    [ testCase "empty argv" $ parseArgs [] @?= Right (CliOptions [] [])
+    [ testCase "empty argv" $ parseArgs [] @?= Right (CliOptions Nothing [] [])
     , testCase "a single --in" $
         parseArgs ["--in", "0,0=/tmp/in"]
-          @?= Right (CliOptions [((0, 0), "/tmp/in")] [])
+          @?= Right (CliOptions Nothing [((0, 0), "/tmp/in")] [])
     , testCase "a single --out" $
         parseArgs ["--out", "1,0=/tmp/out"]
-          @?= Right (CliOptions [] [((1, 0), "/tmp/out")])
+          @?= Right (CliOptions Nothing [] [((1, 0), "/tmp/out")])
     , testCase "repeated --in and --out together" $
         parseArgs
           ["--in", "0,0=/tmp/a", "--out", "1,0=/tmp/b", "--in", "0,1=/tmp/c"]
           @?= Right
             ( CliOptions
+                Nothing
                 [((0, 0), "/tmp/a"), ((0, 1), "/tmp/c")]
                 [((1, 0), "/tmp/b")]
             )
@@ -72,6 +73,16 @@ parseArgsTests =
           Right _ -> fail "expected a parse error"
     , testCase "an unrecognized flag is an error" $
         case parseArgs ["--bogus"] of
+          Left _ -> pure ()
+          Right _ -> fail "expected a parse error"
+    , testCase "a bare argument names a sheet file" $
+        parseArgs ["my.trellis"] @?= Right (CliOptions (Just "my.trellis") [] [])
+    , testCase "a bare filename coexists with --in/--out" $
+        parseArgs ["my.trellis", "--in", "0,0=/tmp/in", "--out", "1,0=/tmp/out"]
+          @?= Right
+            (CliOptions (Just "my.trellis") [((0, 0), "/tmp/in")] [((1, 0), "/tmp/out")])
+    , testCase "two bare filenames is an error" $
+        case parseArgs ["a.trellis", "b.trellis"] of
           Left _ -> pure ()
           Right _ -> fail "expected a parse error"
     ]

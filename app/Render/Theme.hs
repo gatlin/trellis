@@ -19,6 +19,10 @@ module Render.Theme (
   fillBg,
   selectionFg,
   selectionBg,
+  chartFg,
+  chartBg,
+  chartPalette,
+  heatmapRamp,
   modalBorderFg,
   modalBorderBg,
   modalHPad,
@@ -81,6 +85,35 @@ its own.
 selectionFg, selectionBg :: Tb2.Tb2ColorAttr
 selectionFg = 0 -- black
 selectionBg = 33 -- bright blue
+
+{- | The bar\/line chart panel's own content color - a classic terminal-plot
+green, distinct from every other tier above.
+-}
+chartFg, chartBg :: Tb2.Tb2ColorAttr
+chartFg = 46
+chartBg = Tb2.colorDefault
+
+{- | A small categorical palette a bar chart's bars cycle through by
+position, so adjacent bars read as distinct at a glance instead of one
+same-colored shape repeated - unlike 'chartFg', which the line chart
+keeps using uniformly, since a multi-colored line reads as noise rather
+than signal.
+-}
+chartPalette :: [Tb2.Tb2ColorAttr]
+chartPalette = [46, 51, 226, 208, 213, 39]
+
+{- | A heatmap's cold-to-hot gradient, each step's colors chosen together
+so the text stays legible against its own background - the same reasoning
+'focusFg'\/'focusBg' already follows. Indexed by 'SheetState.heatmapStep'.
+-}
+heatmapRamp :: [(Tb2.Tb2ColorAttr, Tb2.Tb2ColorAttr)]
+heatmapRamp =
+  [ (15, 27) -- white on blue: coolest
+  , (0, 51) -- black on cyan
+  , (0, 46) -- black on green
+  , (0, 226) -- black on yellow
+  , (15, 196) -- white on red: hottest
+  ]
 
 {- | The opposite of the grid's ruling: a dialog demanding attention, so
 drawn bright ('textFg's white) with a heavy line weight rather than a new

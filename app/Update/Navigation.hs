@@ -7,6 +7,7 @@ module Update.Navigation (
   termSize,
   moveTo,
   nudge,
+  nudgeSelecting,
   zoomBy,
   panBy,
 ) where
@@ -40,12 +41,37 @@ moveTo target = do
           clampOrigin (cellWidth st) target dims (viewportOrigin st)
       }
 
--- | Moves the cursor by a relative offset from its current position.
+{- | Moves the cursor by a relative offset from its current position,
+collapsing any active selection - the same plain-arrow-key behavior
+every spreadsheet has, whether that selection came from a mouse drag or
+from 'nudgeSelecting'.
+-}
 nudge :: (Int, Int) -> UI.Action (UI.Store SheetState) IO ()
 nudge (dx, dy) = do
   st <- UI.get
   let (cx, cy) = cursor st
   moveTo (cx + dx, cy + dy)
+  UI.modify (\st' -> st'{selection = Nothing})
+
+{- | Like 'nudge', but extends 'selection' instead of collapsing it - the
+Shift+Arrow gesture. Keeps the same anchor across repeated calls as
+long as the selection's endpoint still matches where the cursor was
+before this move (i.e. this continues a still-in-progress
+Shift+Arrow run, mouse drag, or click); otherwise (no selection yet, or
+the last move was a plain, collapsing 'nudge') starts fresh, anchored
+at the cursor's current position - the same "was this a fresh press or
+a continuation" question 'Update.Core.clickCell' answers for a mouse
+drag, just with no press\/motion distinction to lean on here.
+-}
+nudgeSelecting :: (Int, Int) -> UI.Action (UI.Store SheetState) IO ()
+nudgeSelecting (dx, dy) = do
+  st <- UI.get
+  let (cx, cy) = cursor st
+      anchor = case selection st of
+        Just (a, e) | e == (cx, cy) -> a
+        _ -> (cx, cy)
+  moveTo (cx + dx, cy + dy)
+  UI.modify (\st' -> st'{selection = Just (anchor, cursor st')})
 
 -- | Adjusts zoom by @delta@ steps, clamped, re-clamping the viewport to match.
 zoomBy :: Int -> UI.Action (UI.Store SheetState) IO ()

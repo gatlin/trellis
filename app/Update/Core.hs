@@ -21,7 +21,9 @@ import Formula (Expr)
 import Keymap (KeyMap (..), matches, matchesMouse)
 import Live (OutBinding, declareSubscription, parseLiveSpec)
 import Parser (parseExpr)
+import SheetFile (serialize)
 import SheetState (
+  ChartType (..),
   EditorState (..),
   LiveBinding (..),
   SheetState (..),
@@ -33,9 +35,10 @@ import Trellis.CPS (CPS, lift, reset, shift)
 import qualified Trellis.Orc as Orc
 import qualified Trellis.UI as UI
 import Update.Buffer (clampCursor, deleteAt, deleteBefore, insertAt, isValid)
-import Update.Events (dragging, isKey, isMouse, printableChar)
+import Update.Chart (toggleChart)
+import Update.Events (dragging, isKey, isMouse, isShiftKey, printableChar)
 import Update.Fill (commitFill, fillDragTo)
-import Update.Navigation (moveTo, nudge, panBy, zoomBy)
+import Update.Navigation (moveTo, nudge, nudgeSelecting, panBy, zoomBy)
 import Update.Subscriptions (
   cancelSubscription,
   drainLiveUpdates,
@@ -100,16 +103,27 @@ update ::
   Orc.Group ->
   TVar [((Int, Int), Expr)] ->
   [OutBinding] ->
+  Maybe FilePath ->
   UI.Event ->
   UI.Action (UI.Store SheetState) IO ()
-update _ _ mailbox outs UI.Tick = do
+update _ _ mailbox outs _ UI.Tick = do
   drainLiveUpdates mailbox
   publishOutUpdates outs
-update keymap root mailbox _outs (UI.InputEvent evt) = do
+update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
   st <- UI.get
   maybe navigating editing (editor st)
  where
   navigating
+    -- \| Checked ahead of the plain arrow bindings below, which would
+    -- otherwise also match a Shift-held arrow event and swallow it as an
+    -- ordinary move - 'matches' only ever looks at the Alt bit. Always
+    -- the physical arrow keys, like 'editing's cursor movement, since
+    -- Shift is a modifier termbox2 only ever reports on those, not on a
+    -- remapped 'moveUp' binding.
+    | isShiftKey evt Tb2.keyArrowUp = nudgeSelecting (0, -1)
+    | isShiftKey evt Tb2.keyArrowDown = nudgeSelecting (0, 1)
+    | isShiftKey evt Tb2.keyArrowLeft = nudgeSelecting (-1, 0)
+    | isShiftKey evt Tb2.keyArrowRight = nudgeSelecting (1, 0)
     | matches (moveUp keymap) evt = nudge (0, -1)
     | matches (moveDown keymap) evt = nudge (0, 1)
     | matches (moveLeft keymap) evt = nudge (-1, 0)
@@ -137,10 +151,15 @@ update keymap root mailbox _outs (UI.InputEvent evt) = do
         UI.modify (\st -> st{panAnchor = Nothing, fillDrag = Nothing})
     | matches (confirm keymap) evt = beginEditHere
     | matches (clearCell keymap) evt = clearFocusedCell
+    | matches (barChartKey keymap) evt = toggleChart BarChart
+    | matches (lineChartKey keymap) evt = toggleChart LineChart
+    | matches (heatmapKey keymap) evt = toggleChart Heatmap
+    | matches (saveKey keymap) evt = saveSheet
     -- \| Otherwise inert while navigating (only 'editing' uses it to
     -- discard an edit) - repurposed here as the obvious way to back out
-    -- of a selection that's no longer wanted.
-    | matches (cancel keymap) evt = UI.modify (\st -> st{selection = Nothing})
+    -- of a selection, or an open chart, that's no longer wanted.
+    | matches (cancel keymap) evt =
+        UI.modify (\st -> st{selection = Nothing, chart = Nothing})
     | otherwise = return ()
 
   -- \| While a formula is being typed, navigation is suspended entirely -
@@ -215,6 +234,14 @@ update keymap root mailbox _outs (UI.InputEvent evt) = do
     st <- UI.get
     cancelSubscription (cursor st)
     UI.modify (\st' -> st'{cells = Map.delete (cursor st) (cells st')})
+
+  -- \| Writes the sheet back to the file it was loaded from - a no-op
+  -- if Trellis wasn't started with one, since there's no "save as" yet.
+  saveSheet = case maybeFile of
+    Nothing -> return ()
+    Just path -> do
+      st <- UI.get
+      UI.liftIO (writeFile path (serialize st))
 
   -- \| Extends the in-progress selection's endpoint, keeping its anchor
   -- fixed - same rectangle 'selectButton' has been walking the cursor

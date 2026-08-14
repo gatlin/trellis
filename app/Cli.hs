@@ -1,7 +1,8 @@
 {- |
 Module: Cli
-Description: Parses "--in"/"--out" command-line flags for pre-populating
-cells with a live subscription, or publishing a cell's value out.
+Description: Parses command-line arguments - a sheet file to open, and
+"--in"/"--out" flags for pre-populating cells with a live subscription,
+or publishing a cell's value out.
 -}
 module Cli (
   CliOptions (..),
@@ -10,22 +11,28 @@ module Cli (
   parseCoord,
 ) where
 
-{- | Everything gathered from argv: which cells to pre-bind to a
-@!tail@ subscription ("--in"), and which cells to publish out to a
-pipe\/file whenever their value changes ("--out").
+import Data.List (isPrefixOf)
+
+{- | Everything gathered from argv: a sheet file to load at startup, if
+any; which cells to pre-bind to a @!tail@ subscription ("--in"); and
+which cells to publish out to a pipe\/file whenever their value changes
+("--out").
 -}
 data CliOptions = CliOptions
-  { cliIns :: [((Int, Int), FilePath)]
+  { cliFile :: Maybe FilePath
+  , cliIns :: [((Int, Int), FilePath)]
   , cliOuts :: [((Int, Int), FilePath)]
   }
   deriving (Eq, Show)
 
 {- | Parses argv; "--in"\/"--out" each consume the next token as
-@COL,ROW=PATH@. Anything else - missing value, bad coordinate, unknown
-flag - is one human-readable 'Left', not a crash.
+@COL,ROW=PATH@, and at most one bare (non-@--@) argument names a sheet
+file to open. Anything else - missing value, bad coordinate, unknown
+flag, a second bare argument - is one human-readable 'Left', not a
+crash.
 -}
 parseArgs :: [String] -> Either String CliOptions
-parseArgs = go (CliOptions [] [])
+parseArgs = go (CliOptions Nothing [] [])
  where
   go opts [] = Right opts
   go opts ("--in" : val : rest) = case parseCoordPath val of
@@ -36,6 +43,10 @@ parseArgs = go (CliOptions [] [])
     Just cp -> go opts{cliOuts = cliOuts opts ++ [cp]} rest
     Nothing -> Left ("--out: malformed COL,ROW=PATH: " ++ val)
   go _ ["--out"] = Left "--out: missing COL,ROW=PATH argument"
+  go opts (arg : rest)
+    | not ("--" `isPrefixOf` arg) = case cliFile opts of
+        Nothing -> go opts{cliFile = Just arg} rest
+        Just _ -> Left ("only one sheet file may be given: " ++ arg)
   go _ (arg : _) = Left ("unrecognized argument: " ++ arg)
 
 -- | @"0,0=/tmp/pipe"@ -> @Just ((0,0), "\/tmp\/pipe")@.

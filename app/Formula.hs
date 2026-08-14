@@ -15,6 +15,9 @@ module Formula (
   Op (..),
   CompareOp (..),
   AggOp (..),
+  Fn1Op (..),
+  Fn2Op (..),
+  Fn3Op (..),
   Value (..),
   Coord,
   blank,
@@ -32,6 +35,26 @@ import Data.Char (isSpace)
 import Data.Functor.Rep (Representable (..))
 import Data.List (intercalate)
 import qualified Data.Map.Strict as Map
+import Formula.Builtins (
+  AggOp (..),
+  Fn1Op (..),
+  Fn2Op (..),
+  Fn3Op (..),
+  Value (..),
+  aggName,
+  aggregate,
+  apply1,
+  apply2,
+  apply3,
+  boolean,
+  fn1Name,
+  fn2Name,
+  fn3Name,
+  formatNum,
+  numeric,
+  showValue,
+  text,
+ )
 import Trellis.Lists (Counted (..))
 import Trellis.Sheet (
   Coordinate,
@@ -53,10 +76,6 @@ data Op = Add | Sub | Mul | Div
   deriving (Eq, Show)
 
 data CompareOp = CEq | CNeq | CLt | CLte | CGt | CGte
-  deriving (Eq, Show)
-
--- | An aggregate function applied to a range - see 'ExprF's 'RangeF'.
-data AggOp = SumOp | AvgOp | CountOp | MinOp | MaxOp
   deriving (Eq, Show)
 
 {- | 'Expr's pattern functor: every recursive position replaced by a type
@@ -83,6 +102,12 @@ data ExprF a
   | ToStringF a
   | ToNumberF a
   | IfF a a a
+  | -- | A one-argument built-in - see "Formula.Builtins".
+    Call1F Fn1Op a
+  | -- | A two-argument built-in.
+    Call2F Fn2Op a a
+  | -- | A three-argument built-in.
+    Call3F Fn3Op a a a
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 -- | What's typed into a cell, once parsed - the fixed point of 'ExprF'.
@@ -93,15 +118,6 @@ newtype Expr = Expr (ExprF Expr)
 blank :: Expr
 blank = Expr BlankF
 
--- | What a cell displays once evaluated.
-data Value
-  = VBlank
-  | VNum Double
-  | VStr String
-  | VBool Bool
-  | VErr String
-  deriving (Eq, Show)
-
 -- | A 2-dimensional coordinate for indexing a 'Sheet2'.
 type Coord = Coordinate Nat2
 
@@ -110,29 +126,6 @@ fromPair (x, y) = Abs x ::: Abs y ::: CountedNil
 
 toPair :: Coord -> (Int, Int)
 toPair (x ::: y ::: _) = (getRef x, getRef y)
-
--- Typed views of a 'Value' -------------------------------------------------
-
-numeric :: Value -> Either String Double
-numeric VBlank = Right 0
-numeric (VNum n) = Right n
-numeric (VErr e) = Left e
-numeric (VStr _) = Left "expected a number, got text (try NUM(...))"
-numeric (VBool _) = Left "expected a number, got a boolean"
-
-text :: Value -> Either String String
-text VBlank = Right ""
-text (VStr s) = Right s
-text (VErr e) = Left e
-text (VNum _) = Left "expected text, got a number (try STR(...))"
-text (VBool _) = Left "expected text, got a boolean (try STR(...))"
-
-boolean :: Value -> Either String Bool
-boolean VBlank = Right False
-boolean (VBool b) = Right b
-boolean (VErr e) = Left e
-boolean (VNum _) = Left "expected a boolean, got a number"
-boolean (VStr _) = Left "expected a boolean, got text"
 
 -- Operators -----------------------------------------------------------------
 
@@ -232,42 +225,7 @@ ifV c t e = case boolean c of
   Right True -> t
   Right False -> e
 
-formatNum :: Double -> String
-formatNum n
-  | n == fromIntegral r = show r
-  | otherwise = show n
- where
-  r = round n :: Integer
-
 -- Compiling and evaluating --------------------------------------------------
-
-{- | Folds the values a range covers: 'VBlank' is skipped (identity, same
-treatment blanks get everywhere else here), a 'VErr' anywhere propagates,
-and anything else non-numeric is a strict error rather than a silent
-skip - same no-implicit-coercion stance 'numeric' already takes. 'SUM'\/
-'COUNT' are well-defined over an all-blank range (0); 'AVERAGE'\/'MIN'\/
-'MAX' of one are undefined, so they error instead of guessing.
--}
-aggregate :: AggOp -> [Value] -> Value
-aggregate op vals = case traverse asNumbers vals of
-  Left e -> VErr e
-  Right nss -> reduceAgg op (concat nss)
- where
-  asNumbers VBlank = Right []
-  asNumbers (VNum n) = Right [n]
-  asNumbers (VErr e) = Left e
-  asNumbers (VStr _) = Left "expected a number, got text (try NUM(...))"
-  asNumbers (VBool _) = Left "expected a number, got a boolean"
-
-reduceAgg :: AggOp -> [Double] -> Value
-reduceAgg SumOp ns = VNum (sum ns)
-reduceAgg CountOp ns = VNum (fromIntegral (length ns))
-reduceAgg AvgOp [] = VErr "AVERAGE of an empty range"
-reduceAgg AvgOp ns = VNum (sum ns / fromIntegral (length ns))
-reduceAgg MinOp [] = VErr "MIN of an empty range"
-reduceAgg MinOp ns = VNum (minimum ns)
-reduceAgg MaxOp [] = VErr "MAX of an empty range"
-reduceAgg MaxOp ns = VNum (maximum ns)
 
 {- | Shifts every 'RefF'\/'RangeF' inside an 'Expr' by a relative offset,
 leaving everything else untouched - what the fill-drag gesture uses to
@@ -322,6 +280,12 @@ compile here (Expr (ToNumberF a)) =
   toNumberV . compile here a
 compile here (Expr (IfF c t e)) =
   \sh -> ifV (compile here c sh) (compile here t sh) (compile here e sh)
+compile here (Expr (Call1F op a)) =
+  apply1 op . compile here a
+compile here (Expr (Call2F op a b)) =
+  \sh -> apply2 op (compile here a sh) (compile here b sh)
+compile here (Expr (Call3F op a b c)) =
+  \sh -> apply3 op (compile here a sh) (compile here b sh) (compile here c sh)
 
 {- | Compile every cell (each against its own absolute position) and
 resolve the whole sheet in one comonadic pass.
@@ -371,6 +335,9 @@ renderExpr = render 0
   render _ (Expr (ToStringF a)) = call "STR" [a]
   render _ (Expr (ToNumberF a)) = call "NUM" [a]
   render _ (Expr (IfF c t e)) = call "IF" [c, t, e]
+  render _ (Expr (Call1F op a)) = call (fn1Name op) [a]
+  render _ (Expr (Call2F op a b)) = call (fn2Name op) [a, b]
+  render _ (Expr (Call3F op a b c)) = call (fn3Name op) [a, b, c]
 
   chain minPrec p s a b = wrap minPrec p (render p a ++ s ++ render (p + 1) b)
   wrap minPrec p str = if p < minPrec then "(" ++ str ++ ")" else str
@@ -397,12 +364,6 @@ renderExpr = render 0
   compareSym CGt = ">"
   compareSym CGte = ">="
 
-  aggName SumOp = "SUM"
-  aggName AvgOp = "AVERAGE"
-  aggName CountOp = "COUNT"
-  aggName MinOp = "MIN"
-  aggName MaxOp = "MAX"
-
   quote s = "\"" ++ concatMap escape s ++ "\""
   escape '"' = "\\\""
   escape c = [c]
@@ -416,18 +377,6 @@ window (x, y) cols rows sh =
   Trellis.Sheet.take
     (rightBy cols & belowBy rows)
     (go (rightBy x & belowBy y) sh)
-
--- | How a 'Value' actually displays, in a cell or published out to a pipe.
-showValue :: Value -> String
-showValue VBlank = ""
-showValue (VErr e) = e
-showValue (VStr s) = s
-showValue (VBool b) = if b then "TRUE" else "FALSE"
-showValue (VNum n)
-  | n == fromIntegral rounded = show rounded
-  | otherwise = show n
- where
-  rounded = round n :: Integer
 
 {- [^1]:
 A cell reference can't be given a fixed type ahead of time - what's at

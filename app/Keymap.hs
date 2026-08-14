@@ -87,14 +87,21 @@ data KeyMap = KeyMap
   , confirm :: Binding
   -- ^ Starts an edit when navigating; commits it when editing.
   , cancel :: Binding
-  -- ^ Discards an in-progress edit.
+  -- ^ Discards an in-progress edit, or clears a selection\/open chart.
   , clearCell :: Binding
   -- ^ Clears the focused cell's content directly, without editing.
+  , barChartKey, lineChartKey, heatmapKey :: Binding
+  {- ^ Toggle a bar\/line\/heatmap chart over the current selection - the
+  same key again closes it; a different one switches, if the selection
+  qualifies (see 'SheetState.classifyChartRange'). -}
+  , saveKey :: Binding
+  -- ^ Writes the sheet back to the file it was loaded from, if any.
   }
 
 {- | Arrows navigate, the wheel zooms, left-click selects\/drags,
 middle-click-drag pans, right-click-drag fills a range with the source
-cell's formula (adjusted), Enter starts\/commits an edit, Escape cancels,
+cell's formula (adjusted), @b@\/@l@\/@h@ toggle a bar\/line\/heatmap
+chart over the selection, Enter starts\/commits an edit, Escape cancels,
 Delete clears a cell. Kept in sync with 'defaultConfigText' by hand.
 -}
 defaultKeyMap :: KeyMap
@@ -112,6 +119,10 @@ defaultKeyMap =
     , confirm = Plain (Key Tb2.keyCtrlEnter)
     , cancel = Plain (Key Tb2.keyCtrlEsc)
     , clearCell = Plain (Key Tb2.keyDelete)
+    , barChartKey = Plain (Char 'b')
+    , lineChartKey = Plain (Char 'l')
+    , heatmapKey = Plain (Char 'h')
+    , saveKey = Plain (Key Tb2.keyCtrlS)
     }
 
 -- | The named keys a config file can refer to, beyond a bare character.
@@ -135,6 +146,7 @@ namedKeys =
   , ("End", Tb2.keyEnd)
   , ("PageUp", Tb2.keyPgUp)
   , ("PageDown", Tb2.keyPgDn)
+  , ("Ctrl+S", Tb2.keyCtrlS)
   ]
 
 {- | Maps a config setting name to the 'KeyMap' field it updates (full
@@ -149,6 +161,10 @@ bindingSetters =
   , ("confirm", \k m -> m{confirm = k})
   , ("cancel", \k m -> m{cancel = k})
   , ("clearCell", \k m -> m{clearCell = k})
+  , ("barChartKey", \k m -> m{barChartKey = k})
+  , ("lineChartKey", \k m -> m{lineChartKey = k})
+  , ("heatmapKey", \k m -> m{heatmapKey = k})
+  , ("saveKey", \k m -> m{saveKey = k})
   ]
 
 -- | Same, for the mouse-only fields that take a 'MouseBinding'.
@@ -220,7 +236,7 @@ defaultConfigText =
     , "# itself, so it's rejected rather than silently never firing."
     , "# Named keys: ArrowUp, ArrowDown, ArrowLeft, ArrowRight, WheelUp,"
     , "# WheelDown, MouseLeft, MouseRight, MouseMiddle, Enter, Escape,"
-    , "# Delete, Tab, Space, Home, End, PageUp, PageDown."
+    , "# Delete, Tab, Space, Home, End, PageUp, PageDown, Ctrl+S."
     , "#"
     , "# scrollUp/scrollDown zoom the grid in and out. selectButton,"
     , "# panButton, fillButton: mouse-only settings may additionally be"
@@ -232,6 +248,13 @@ defaultConfigText =
     , "# fillButton, held and dragged, replicates the source cell's formula"
     , "# across the dragged range, with references adjusted to match. Give"
     , "# each a different gesture or one will always win over the others."
+    , "#"
+    , "# barChartKey/lineChartKey/heatmapKey toggle a chart over the current"
+    , "# selection - press the same one again to close it, or a different"
+    , "# one to switch, as long as the selection still qualifies."
+    , "#"
+    , "# saveKey writes the sheet back to the file it was loaded from, if"
+    , "# any - a no-op if Trellis wasn't started with a file."
     , ""
     , "moveUp = ArrowUp"
     , "moveDown = ArrowDown"
@@ -245,6 +268,10 @@ defaultConfigText =
     , "confirm = Enter"
     , "cancel = Escape"
     , "clearCell = Delete"
+    , "barChartKey = b"
+    , "lineChartKey = l"
+    , "heatmapKey = h"
+    , "saveKey = Ctrl+S"
     ]
 
 {- | Reads the keybindings config file (creating it from

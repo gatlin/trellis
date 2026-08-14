@@ -4,6 +4,7 @@ Description: Pure predicates over termbox2 input events.
 -}
 module Update.Events (
   isKey,
+  isShiftKey,
   isMouse,
   dragging,
   printableChar,
@@ -15,6 +16,14 @@ import qualified Termbox2 as Tb2
 -- | Does an incoming event carry a given key, of the given event type?
 isKey :: Tb2.Tb2Event -> Tb2.Tb2Key -> Bool
 isKey evt k = Tb2._type evt == Tb2.eventKey && Tb2._key evt == k
+
+{- | Does an incoming key event carry a given key with Shift held -
+termbox2 only ever sets this modifier on the arrow keys (a bare
+character key like 'k' held with Shift just arrives as 'K', a different
+character, not a modifier on 'k'), so this is only meaningful for those.
+-}
+isShiftKey :: Tb2.Tb2Event -> Tb2.Tb2Key -> Bool
+isShiftKey evt k = isKey evt k && Tb2._mod evt .&. Tb2.modShift /= 0
 
 isMouse :: Tb2.Tb2Event -> Tb2.Tb2Key -> Bool
 isMouse evt k = Tb2._type evt == Tb2.eventMouse && Tb2._key evt == k
