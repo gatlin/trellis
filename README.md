@@ -80,6 +80,134 @@ support and 256 colors.
   cell's formula, not part of the formula language itself.
 * Sheets save and load to a plain-text file.
 
+# Architecture.
+
+## Module layout
+
+```
+app/
+  Main.hs              -- entry point, wires everything together
+  Cli.hs               -- command-line argument parsing
+  Parser.hs            -- hand-written recursive-descent formula parser
+  Formula.hs           -- expression AST (Expr, Op, etc.)
+  Formula/Builtins.hs  -- Value type, showValue, aggregation, function eval
+  SheetFile.hs         -- plain-text sheet file parse/serialize
+  SheetState/
+    Chart.hs           -- chart classification and rendering data
+    Fill.hs            -- fill-source classification and preview geometry
+    Geometry.hs        -- viewport math: cell widths, visible rows/cols, clamping
+  Live/
+    In.hs              -- live input cells (!Ns cmd, !tail path)
+    Out.hs             -- out bindings (cell → file, background thread)
+  Render/
+    Theme.hs           -- color palette, selection colors, chart colors
+  Update/
+    Buffer.hs          -- formula editor buffer (insert, delete, clamp)
+    Events.hs          -- termbox2 event helpers (key matching, printable chars)
+
+src/Trellis/
+  Orc.hs               -- lightweight process monad (spawn, sync, race, scan)
+  HIO.hs               -- IO-based monad with group/thread tracking
+  CPS.hs               -- continuation-passing style foundation for Orc
+  UI.hs                -- termbox2 screen primitives (drawText, drawGlyph)
+  Sheet.hs             -- typed list/stream/tape combinators
+  Tubes.hs             -- source/sink streaming
+  Peano.hs             -- compile-time natural numbers (bounded concurrency)
+```
+
+`app/` is the spreadsheet application. `src/Trellis/` is a small
+supporting library: concurrency primitives, UI drawing helpers, and
+typed collection combinators. The split exists so the concurrency and
+UI layers are reusable and testable in isolation from the spreadsheet
+logic.
+
+## Evaluation model
+
+Cells are evaluated by tying a lazy knot over the grid: each cell's
+value is a thunk that references its neighbors' thunks. No dependency
+graph, no topological sort, no invalidation pass. Circular references
+work naturally because Haskell's laziness defers evaluation until a
+value is actually demanded.
+
+Background work (live cells, out bindings) runs in the `Orc` monad
+(`src/Trellis/Orc.hs`), a small purpose-built process layer that
+provides `spawn`, `sync`, race (`<?>`), and `scan` without pulling in
+a full actor framework. `HIO` underneath tracks thread groups so that
+cancelling a cell's live spec tears down its thread cleanly.
+
+## Type system
+
+The `Value` type in `Formula/Builtins.hs` is closed and explicit:
+
+```haskell
+data Value
+  = VBlank
+  | VNum Double
+  | VStr String
+  | VBool Bool
+  | VErr String
+```
+
+There is **no implicit coercion** between types. `1 + "hello"` is an
+error, not a silent string concatenation. Use `STR` and `NUM` to
+convert explicitly. This is a deliberate design choice: predictable
+behavior, small error surface, and it makes the `VErr` path the only
+way a type mismatch surfaces.
+
+## Parser
+
+The formula parser in `app/Parser.hs` is a hand-written
+recursive-descent parser. It is **not** `megaparsec`, `attoparsec`,
+or `parsec`. Precedence levels from lowest to highest:
+
+1. Comparison (`=`, `<>`, `<`, `>`, `<=`, `>=`)
+2. Additive (`+`, `-`, `&` for string concatenation)
+3. Multiplicative (`*`, `/`)
+4. Unary minus
+5. Atoms (numbers, quoted strings, booleans, cell refs, function calls, `IF`)
+
+To add a new builtin function, touch three files:
+
+1. `Formula.hs` — add a constructor to the AST (e.g. `Call0F RandOp`).
+2. `Parser.hs` — add a parser rule (e.g. `randP = mk0 "RAND" ...`) and
+   wire it into the atom-level `choice`.
+3. `Formula/Builtins.hs` — add the evaluation clause.
+
+Then add it to the feature list in this README.
+
+## Coordinates
+
+All coordinates are **(column, row)** — x first, y second. This
+applies everywhere:
+
+- Cell references in formulas: `@3,2` means column 3, row 2.
+- Ranges: `@1,0:4,3`.
+- CLI flags: `--in 0,0=/path`.
+- Sheet file format: `0,0=10`.
+- Internal data structures: `(Int, Int)` pairs throughout.
+
+This is the opposite of the `(row, column)` convention used by most
+spreadsheet software. It matches the mathematical `(x, y)` convention
+and the terminal's column-then-row addressing.
+
+## Rendering
+
+Uses `termbox2` (a C library with Haskell bindings, vendored as a git
+submodule). 256-color output. All colors are defined in
+`app/Render/Theme.hs`. The UI is drawn from scratch each frame — there
+is no retained-mode widget system. Cell geometry (widths, visible
+rows/cols, clamping) lives in `app/SheetState/Geometry.hs`.
+
+## Live cells and out bindings
+
+These are **not** part of the formula language. A cell's text is first
+checked for a `!` prefix; if it matches a live spec (`!Ns cmd` or
+`!tail path`), the cell runs as a background process instead of being
+parsed as a formula. Out bindings (`OUT x,y=path` in the sheet file, or
+`--out` on the CLI) spawn a background thread that watches a cell's
+value and writes changes to a file. Both use the `Orc` monad for
+lifecycle management.
+
 # Saving and loading sheets.
 
 ```
@@ -117,5 +245,3 @@ pipe nobody's reading yet can't hang the sheet. Coordinates use the
 same `(column,row)` order as `@x,y` in a formula, and either flag can
 be repeated for as many cells as you like. Both compose with a sheet
 file given on the same command line.
-
-
