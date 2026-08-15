@@ -11,6 +11,7 @@ module Formula.Builtins (
   text,
   boolean,
   formatNum,
+  formatDate,
   showValue,
   Fn1Op (..),
   Fn2Op (..),
@@ -26,8 +27,17 @@ module Formula.Builtins (
   aggName,
 ) where
 
-import Data.Char (toLower, toUpper)
+import Data.Char (isSpace, toLower, toUpper)
 import Data.List (isPrefixOf, sort)
+import Data.Time.Calendar (
+  Day,
+  addGregorianMonthsClamped,
+  dayOfMonth,
+  diffDays,
+  month,
+  toGregorian,
+  year,
+ )
 
 -- | What a cell displays once evaluated.
 data Value
@@ -35,6 +45,7 @@ data Value
   | VNum Double
   | VStr String
   | VBool Bool
+  | VDate Day
   | VErr String
   deriving (Eq, Show)
 
@@ -46,6 +57,7 @@ numeric (VNum n) = Right n
 numeric (VErr e) = Left e
 numeric (VStr _) = Left "expected a number, got text (try NUM(...))"
 numeric (VBool _) = Left "expected a number, got a boolean"
+numeric (VDate _) = Left "expected a number, got a date (try YEAR(...), MONTH(...), or DAY(...))"
 
 text :: Value -> Either String String
 text VBlank = Right ""
@@ -53,6 +65,7 @@ text (VStr s) = Right s
 text (VErr e) = Left e
 text (VNum _) = Left "expected text, got a number (try STR(...))"
 text (VBool _) = Left "expected text, got a boolean (try STR(...))"
+text (VDate d) = Right (formatDate d)
 
 boolean :: Value -> Either String Bool
 boolean VBlank = Right False
@@ -60,6 +73,7 @@ boolean (VBool b) = Right b
 boolean (VErr e) = Left e
 boolean (VNum _) = Left "expected a boolean, got a number"
 boolean (VStr _) = Left "expected a boolean, got text"
+boolean (VDate _) = Left "expected a boolean, got a date"
 
 formatNum :: Double -> String
 formatNum n
@@ -68,6 +82,12 @@ formatNum n
  where
   r = round n :: Integer
 
+formatDate :: Day -> String
+formatDate d =
+  let (y, m, day) = toGregorian d
+      pad2 n = if n < 10 then "0" ++ show n else show n
+   in show y ++ "-" ++ pad2 m ++ "-" ++ pad2 day
+
 -- | How a 'Value' actually displays, in a cell or published out to a pipe.
 showValue :: Value -> String
 showValue VBlank = ""
@@ -75,6 +95,7 @@ showValue (VErr e) = e
 showValue (VStr s) = s
 showValue (VBool b) = if b then "TRUE" else "FALSE"
 showValue (VNum n) = formatNum n
+showValue (VDate d) = formatDate d
 
 -- Scalar built-ins, grouped by arity ----------------------------------------
 
@@ -94,6 +115,10 @@ data Fn1Op
   | UpperOp
   | LowerOp
   | TrimOp
+  | YearOp
+  | MonthOp
+  | DayOp
+  | DateOp
   deriving (Eq, Show)
 
 -- | Two-argument built-ins.
@@ -113,6 +138,8 @@ data Fn2Op
 data Fn3Op
   = MidOp
   | SubstituteOp
+  | DateAddOp
+  | DateDiffOp
   deriving (Eq, Show)
 
 -- | An aggregate function applied to a range - see 'Formula.ExprF's 'RangeF'.
@@ -155,6 +182,14 @@ mapTextNum f a b = case (text a, numeric b) of
   (_, Left e) -> VErr e
   (Right s, Right n) -> either VErr id (f s n)
 
+dateVal :: Value -> Either String Day
+dateVal (VDate d) = Right d
+dateVal (VErr e) = Left e
+dateVal VBlank = Left "expected a date, got blank"
+dateVal (VNum _) = Left "expected a date, got a number (try DATE(...))"
+dateVal (VStr _) = Left "expected a date, got text (try DATE(...))"
+dateVal (VBool _) = Left "expected a date, got a boolean"
+
 {- | Domain errors ('SQRT' of a negative number, 'LOG'\/'LN' of a
 non-positive one) would otherwise leak a silent @NaN@ into a 'VNum' -
 caught here and turned into a proper error instead.
@@ -184,6 +219,18 @@ apply1 LowerOp = mapText (VStr . map toLower)
 -- \| 'words'\/'unwords' already strip leading\/trailing whitespace and
 -- collapse internal runs to a single space - exactly Excel's TRIM, for free.
 apply1 TrimOp = mapText (VStr . unwords . words)
+apply1 YearOp = \v -> case dateVal v of
+  Left e -> VErr e
+  Right d -> VNum (fromIntegral (year d))
+apply1 MonthOp = \v -> case dateVal v of
+  Left e -> VErr e
+  Right d -> VNum (fromIntegral (month d))
+apply1 DayOp = \v -> case dateVal v of
+  Left e -> VErr e
+  Right d -> VNum (fromIntegral (dayOfMonth d))
+apply1 DateOp = mapText $ \s -> case reads (dropWhile isSpace s) of
+  [(d, rest)] | all isSpace rest -> VDate d
+  _ -> VErr ("can't parse date: " ++ s)
 
 apply2 :: Fn2Op -> Value -> Value -> Value
 apply2 ModOp = mapNum2 modOp
@@ -219,6 +266,28 @@ apply3 SubstituteOp s old new = case (text s, text old, text new) of
   (_, Left e, _) -> VErr e
   (_, _, Left e) -> VErr e
   (Right str, Right o, Right n) -> VStr (substitute o n str)
+apply3 DateAddOp date n unit = case (dateVal date, numeric n, text unit) of
+  (Left e, _, _) -> VErr e
+  (_, Left e, _) -> VErr e
+  (_, _, Left e) -> VErr e
+  (Right d, Right num, Right u) -> case u of
+    (c : _) -> case toLower c of
+      'y' -> VDate (addGregorianMonthsClamped (round num * 12) d)
+      'm' -> VDate (addGregorianMonthsClamped (round num) d)
+      'd' -> VDate (d + round num)
+      _ -> VErr "DATEADD unit must be \"Y\", \"M\", or \"D\""
+    [] -> VErr "DATEADD unit must be \"Y\", \"M\", or \"D\""
+apply3 DateDiffOp d1 d2 unit = case (dateVal d1, dateVal d2, text unit) of
+  (Left e, _, _) -> VErr e
+  (_, Left e, _) -> VErr e
+  (_, _, Left e) -> VErr e
+  (Right a, Right b, Right u) -> case u of
+    (c : _) -> case toLower c of
+      'y' -> VNum (fromIntegral (year b - year a))
+      'm' -> VNum (fromIntegral ((year b - year a) * 12 + (month b - month a)))
+      'd' -> VNum (fromIntegral (diffDays b a))
+      _ -> VErr "DATEDIF unit must be \"Y\", \"M\", or \"D\""
+    [] -> VErr "DATEDIF unit must be \"Y\", \"M\", or \"D\""
 
 {- | Remainder, sign following the divisor - the Excel\/Python convention,
 not 'Prelude.mod' (which doesn't work on 'Double' anyway).
@@ -360,6 +429,10 @@ fn1Name LenOp = "LEN"
 fn1Name UpperOp = "UPPER"
 fn1Name LowerOp = "LOWER"
 fn1Name TrimOp = "TRIM"
+fn1Name YearOp = "YEAR"
+fn1Name MonthOp = "MONTH"
+fn1Name DayOp = "DAY"
+fn1Name DateOp = "DATE"
 
 fn2Name :: Fn2Op -> String
 fn2Name ModOp = "MOD"
@@ -375,6 +448,8 @@ fn2Name ReptOp = "REPT"
 fn3Name :: Fn3Op -> String
 fn3Name MidOp = "MID"
 fn3Name SubstituteOp = "SUBSTITUTE"
+fn3Name DateAddOp = "DATEADD"
+fn3Name DateDiffOp = "DATEDIF"
 
 aggName :: AggOp -> String
 aggName SumOp = "SUM"

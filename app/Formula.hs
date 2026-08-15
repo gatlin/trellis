@@ -34,7 +34,9 @@ module Formula (
 import Data.Char (isSpace)
 import Data.Functor.Rep (Representable (..))
 import Data.List (intercalate)
+import Data.Time.Calendar (Day, toGregorian)
 import qualified Data.Map.Strict as Map
+import GHC.IO.Unsafe (unsafePerformIO)
 import Formula.Builtins (
   AggOp (..),
   Fn1Op (..),
@@ -50,6 +52,7 @@ import Formula.Builtins (
   fn1Name,
   fn2Name,
   fn3Name,
+  formatDate,
   formatNum,
   numeric,
   showValue,
@@ -106,6 +109,12 @@ data ExprF a
     per cell position.
     -}
     RandF
+  | {- | Today's date (no time component).
+    -}
+    TodayF
+  | {- | Today's date - same as 'TodayF' since we have no time component.
+    -}
+    NowF
   | -- | A one-argument built-in - see "Formula.Builtins".
     Call1F Fn1Op a
   | -- | A two-argument built-in.
