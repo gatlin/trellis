@@ -188,6 +188,8 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     | isKey evt Tb2.keyArrowRight = moveCursor (\p b -> clampCursor (p + 1) b)
     | isKey evt Tb2.keyHome = moveCursor (\_ _ -> 0)
     | isKey evt Tb2.keyEnd = moveCursor (\_ b -> length b)
+    | isKey evt Tb2.keyCtrlA = moveCursor (\_ _ -> 0)
+    | isKey evt Tb2.keyCtrlE = moveCursor (\_ b -> length b)
     | isKey evt Tb2.keyDelete = editBuffer deleteAt
     -- \| Both wire encodings of "backspace" are accepted unconditionally -
     -- which one a terminal sends isn't a preference to configure, it's a
