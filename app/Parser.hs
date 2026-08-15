@@ -23,9 +23,11 @@ call     ::= 'IF' '(' expr ',' expr ',' expr ')'
            | agg '(' range ')'
 fn1      ::= 'ABS' | 'SQRT' | 'LOG' | 'LN' | 'EXP' | 'SIGN' | 'INT' | 'TRUNC'
            | 'CEILING' | 'FLOOR' | 'LEN' | 'UPPER' | 'LOWER' | 'TRIM'
+           | 'YEAR' | 'MONTH' | 'DAY' | 'DATE'
 fn2      ::= 'MOD' | 'POWER' | 'ROUND' | 'ROUNDUP' | 'ROUNDDOWN'
            | 'LEFT' | 'RIGHT' | 'FIND' | 'REPT'
-fn3      ::= 'MID' | 'SUBSTITUTE'
+fn3      ::= 'MID' | 'SUBSTITUTE' | 'DATEADD' | 'DATEDIF'
+date0    ::= 'TODAY' | 'NOW'
 agg      ::= 'SUM' | 'AVERAGE' | 'COUNT' | 'COUNTA' | 'MIN' | 'MAX'
            | 'PRODUCT' | 'MEDIAN' | 'VAR' | 'STDEV'
 range    ::= '\@' int ',' int (':' int ',' int)?
@@ -221,6 +223,14 @@ callP =
     , reptP
     , midP
     , substituteP
+    , dateAddP
+    , dateDiffP
+    , dateP
+    , yearP
+    , monthP
+    , dayP
+    , todayP
+    , nowP
     ]
 
 randP :: Parser Expr
@@ -330,6 +340,21 @@ reptP = mk2 "REPT" (\a b -> Expr (Call2F ReptOp a b))
 midP, substituteP :: Parser Expr
 midP = mk3 "MID" (\a b c -> Expr (Call3F MidOp a b c))
 substituteP = mk3 "SUBSTITUTE" (\a b c -> Expr (Call3F SubstituteOp a b c))
+
+-- | Date built-ins.
+yearP, monthP, dayP, dateP :: Parser Expr
+yearP = mk1 "YEAR" (Expr . Call1F YearOp)
+monthP = mk1 "MONTH" (Expr . Call1F MonthOp)
+dayP = mk1 "DAY" (Expr . Call1F DayOp)
+dateP = mk1 "DATE" (Expr . Call1F DateOp)
+
+dateAddP, dateDiffP :: Parser Expr
+dateAddP = mk3 "DATEADD" (\a b c -> Expr (Call3F DateAddOp a b c))
+dateDiffP = mk3 "DATEDIF" (\a b c -> Expr (Call3F DateDiffOp a b c))
+
+todayP, nowP :: Parser Expr
+todayP = string "TODAY" *> skipSpace *> char '(' *> skipSpace *> char ')' *> pure (Expr TodayF)
+nowP = string "NOW" *> skipSpace *> char '(' *> skipSpace *> char ')' *> pure (Expr NowF)
 
 -- | A one-argument built-in: @NAME(expr)@.
 mk1 :: T.Text -> (Expr -> Expr) -> Parser Expr

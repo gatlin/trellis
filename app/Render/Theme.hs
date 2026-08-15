@@ -25,6 +25,8 @@ module Render.Theme (
   strBg,
   boolFg,
   boolBg,
+  dateFg,
+  dateBg,
   errFg,
   errBg,
   valueColors,
@@ -120,6 +122,13 @@ boolFg, boolBg :: Tb2.Tb2ColorAttr
 boolFg = 114 -- bright green
 boolBg = Tb2.colorDefault
 
+{- | Dates: a cool blue, distinct from the live-cell cyan (51) and
+the selection blue (33).
+-}
+dateFg, dateBg :: Tb2.Tb2ColorAttr
+dateFg = 117 -- bright blue
+dateBg = Tb2.colorDefault
+
 {- | Errors: unmistakable red, the one color that should always demand
 attention.
 -}
@@ -133,6 +142,7 @@ valueColors VBlank = (textFg, textBg)
 valueColors (VNum _) = (numFg, numBg)
 valueColors (VStr _) = (strFg, strBg)
 valueColors (VBool _) = (boolFg, boolBg)
+valueColors (VDate _) = (dateFg, dateBg)
 valueColors (VErr _) = (errFg, errBg)
 
 {- | The bar\/line chart panel's own content color - a classic terminal-plot

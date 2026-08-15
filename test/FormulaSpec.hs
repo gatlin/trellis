@@ -1,6 +1,7 @@
 module FormulaSpec (tests) where
 
 import qualified Data.Map.Strict as Map
+import Data.Time.Calendar (fromGregorian)
 import Formula (
   Expr (..),
   ExprF (..),
@@ -50,6 +51,7 @@ tests =
     , prefixCollisionTests
     , randTests
     , unquotedStringTests
+    , dateTests
     ]
 
 arithmeticTests :: TestTree
@@ -373,6 +375,46 @@ unquotedStringTests =
         case parseExpr "hello world" of
           Left _ -> pure ()
           Right e -> assertBool ("expected parse failure, got " ++ show e) False
+    ]
+
+dateTests :: TestTree
+dateTests =
+  testGroup
+    "date built-ins"
+    [ testCase "DATE parses a date string" $
+        eval "DATE(\"2025-03-15\")" @?= VDate (fromGregorian 2025 3 15)
+    , testCase "YEAR extracts the year" $
+        eval "YEAR(DATE(\"2025-03-15\"))" @?= VNum 2025
+    , testCase "MONTH extracts the month" $
+        eval "MONTH(DATE(\"2025-03-15\"))" @?= VNum 3
+    , testCase "DAY extracts the day" $
+        eval "DAY(DATE(\"2025-03-15\"))" @?= VNum 15
+    , testCase "DATEADD adds days" $
+        eval "DATEADD(DATE(\"2025-01-31\"),1,\"D\")" @?= VDate (fromGregorian 2025 2 1)
+    , testCase "DATEADD adds months with clipping" $
+        eval "DATEADD(DATE(\"2025-01-31\"),1,\"M\")" @?= VDate (fromGregorian 2025 2 28)
+    , testCase "DATEADD adds years" $
+        eval "DATEADD(DATE(\"2025-03-15\"),1,\"Y\")" @?= VDate (fromGregorian 2026 3 15)
+    , testCase "DATEDIF days" $
+        eval "DATEDIF(DATE(\"2025-01-01\"),DATE(\"2025-03-15\"),\"D\")" @?= VNum 73
+    , testCase "DATEDIF months" $
+        eval "DATEDIF(DATE(\"2025-01-15\"),DATE(\"2025-03-15\"),\"M\")" @?= VNum 2
+    , testCase "DATEDIF years" $
+        eval "DATEDIF(DATE(\"2024-06-15\"),DATE(\"2026-06-15\"),\"Y\")" @?= VNum 2
+    , testCase "TODAY returns a VDate" $
+        case eval "TODAY()" of
+          VDate _ -> pure ()
+          other -> assertBool ("expected VDate, got " ++ show other) False
+    , testCase "NOW returns a VDate" $
+        case eval "NOW()" of
+          VDate _ -> pure ()
+          other -> assertBool ("expected VDate, got " ++ show other) False
+    , testCase "DATEADD with invalid unit is an error" $
+        assertBool "expected a VErr" (isErr (eval "DATEADD(DATE(\"2025-01-01\"),1,\"W\")"))
+    , testCase "DATEDIF with invalid unit is an error" $
+        assertBool "expected a VErr" (isErr (eval "DATEDIF(DATE(\"2025-01-01\"),DATE(\"2025-03-15\"),\"W\")"))
+    , testCase "YEAR on a non-date is an error" $
+        assertBool "expected a VErr" (isErr (eval "YEAR(42)"))
     ]
 
 {- [^1]:

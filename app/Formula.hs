@@ -34,7 +34,9 @@ module Formula (
 import Data.Char (isSpace)
 import Data.Functor.Rep (Representable (..))
 import Data.List (intercalate)
+import Data.Time (zonedTimeToUTC)
 import Data.Time.Calendar (Day, toGregorian)
+import Data.Time.Clock (UTCTime (..), getZonedTime)
 import qualified Data.Map.Strict as Map
 import GHC.IO.Unsafe (unsafePerformIO)
 import Formula.Builtins (
@@ -292,6 +294,8 @@ compile here (Expr (ToStringF a)) =
 compile here (Expr (ToNumberF a)) =
   toNumberV . compile here a
 compile (hx, hy) (Expr RandF) = const (VNum (pseudoRand hx hy))
+compile _ (Expr TodayF) = const (VDate today)
+compile _ (Expr NowF) = const (VDate today)
 compile here (Expr (IfF c t e)) =
   \sh -> ifV (compile here c sh) (compile here t sh) (compile here e sh)
 compile here (Expr (Call1F op a)) =
@@ -350,6 +354,8 @@ renderExpr = render 0
   render _ (Expr (ToNumberF a)) = call "NUM" [a]
   render _ (Expr (IfF c t e)) = call "IF" [c, t, e]
   render _ (Expr RandF) = "RAND()"
+  render _ (Expr TodayF) = "TODAY()"
+  render _ (Expr NowF) = "NOW()"
   render _ (Expr (Call1F op a)) = call (fn1Name op) [a]
   render _ (Expr (Call2F op a b)) = call (fn2Name op) [a, b]
   render _ (Expr (Call3F op a b c)) = call (fn3Name op) [a, b, c]
@@ -382,6 +388,15 @@ renderExpr = render 0
   quote s = "\"" ++ concatMap escape s ++ "\""
   escape '"' = "\\\""
   escape c = [c]
+
+{- | Today's date, captured once at module load. Both 'TODAY' and 'NOW'
+resolve to this since the formula language has no time component.
+-}
+today :: Day
+today = unsafePerformIO $ do
+  zt <- getZonedTime
+  let UTCTime d _ = zonedTimeToUTC zt
+  return d
 
 {- | Deterministic pseudo-random in @[0,1)@ derived from cell coordinates.
 Each cell gets a distinct stable value; re-evaluating the same sheet

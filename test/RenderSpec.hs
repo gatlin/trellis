@@ -1,9 +1,12 @@
 module RenderSpec (tests) where
 
+import Data.Time.Calendar (fromGregorian)
 import Formula (Value (..))
 import Render.Theme (
   boolBg,
   boolFg,
+  dateBg,
+  dateFg,
   errBg,
   errFg,
   numBg,
@@ -29,6 +32,8 @@ tests =
         valueColors (VStr "hello") @=? (strFg, strBg)
     , testCase "VBool maps to green" $
         valueColors (VBool True) @=? (boolFg, boolBg)
+    , testCase "VDate maps to blue" $
+        valueColors (VDate (fromGregorian 2025 1 1)) @=? (dateFg, dateBg)
     , testCase "VErr maps to red" $
         valueColors (VErr "boom") @=? (errFg, errBg)
     , testCase "strBg differs from textBg (header contrast)" $
