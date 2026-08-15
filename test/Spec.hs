@@ -3,6 +3,7 @@ module Main (main) where
 import qualified CliSpec
 import qualified FormulaSpec
 import qualified LiveSpec
+import qualified RenderSpec
 import qualified SheetFileSpec
 import qualified SheetStateSpec
 import Test.Tasty (defaultMain, testGroup)
@@ -19,4 +20,5 @@ main =
       , LiveSpec.tests
       , CliSpec.tests
       , SheetFileSpec.tests
+      , RenderSpec.tests
       ]

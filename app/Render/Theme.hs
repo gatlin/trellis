@@ -19,6 +19,15 @@ module Render.Theme (
   fillBg,
   selectionFg,
   selectionBg,
+  numFg,
+  numBg,
+  strFg,
+  strBg,
+  boolFg,
+  boolBg,
+  errFg,
+  errBg,
+  valueColors,
   chartFg,
   chartBg,
   chartPalette,
@@ -30,6 +39,7 @@ module Render.Theme (
   padTo,
 ) where
 
+import Formula (Value (..))
 import qualified Termbox2 as Tb2
 
 {- | One global setting for the whole app, not per-call - every color used
@@ -85,6 +95,45 @@ its own.
 selectionFg, selectionBg :: Tb2.Tb2ColorAttr
 selectionFg = 0 -- black
 selectionBg = 33 -- bright blue
+
+-- | Per-type cell colors: each 'Value' constructor gets its own fg/bg
+-- pair so the sheet is scannable at a glance.
+
+{- | Numbers: a warm, distinct hue that reads as "data" without
+competing with the special-purpose tiers above.
+-}
+numFg, numBg :: Tb2.Tb2ColorAttr
+numFg = 222 -- bright orange
+numBg = Tb2.colorDefault
+
+{- | Strings: high-contrast "header" treatment - bright text on a dark
+background, visually distinct from every other type.
+-}
+strFg, strBg :: Tb2.Tb2ColorAttr
+strFg = 15 -- bright white
+strBg = 235 -- dark grey
+
+{- | Booleans: a clear green, distinct from the chart green (46) and
+the live-cell cyan (51).
+-}
+boolFg, boolBg :: Tb2.Tb2ColorAttr
+boolFg = 114 -- bright green
+boolBg = Tb2.colorDefault
+
+{- | Errors: unmistakable red, the one color that should always demand
+attention.
+-}
+errFg, errBg :: Tb2.Tb2ColorAttr
+errFg = 196 -- bright red
+errBg = Tb2.colorDefault
+
+-- | Map an evaluated 'Value' to its display color pair.
+valueColors :: Value -> (Tb2.Tb2ColorAttr, Tb2.Tb2ColorAttr)
+valueColors VBlank = (textFg, textBg)
+valueColors (VNum _) = (numFg, numBg)
+valueColors (VStr _) = (strFg, strBg)
+valueColors (VBool _) = (boolFg, boolBg)
+valueColors (VErr _) = (errFg, errBg)
 
 {- | The bar\/line chart panel's own content color - a classic terminal-plot
 green, distinct from every other tier above.

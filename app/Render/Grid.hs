@@ -36,6 +36,7 @@ import Render.Theme (
   selectionFg,
   textBg,
   textFg,
+  valueColors,
  )
 import SheetState (
   Chart (..),
@@ -239,7 +240,7 @@ renderCells
               | selected = (selectionFg, selectionBg)
               | live = (liveFg, liveBg)
               | published = (outFg, outBg)
-              | otherwise = (textFg, textBg)
+              | otherwise = valueColors val
         UI.drawText
           (gutterWidth + colIx * cw)
           screenRow
