@@ -59,7 +59,7 @@ support and 256 colors.
   `SQRT`, `LOG`, `LN`, `EXP`, `SIGN`, `INT`, `TRUNC`, `CEILING`,
   `FLOOR`, `MOD`, `POWER`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `LEN`,
   `UPPER`, `LOWER`, `TRIM`, `LEFT`, `RIGHT`, `FIND`, `REPT`, `MID`,
-  `SUBSTITUTE`.
+  `SUBSTITUTE`, `RAND`.
 * Mouse support: click to select or drag, double-click to edit, scroll
   to zoom, middle-click-drag to pan, right-click-drag to fill a range
   with the source cell's formula (references adjusted to match).

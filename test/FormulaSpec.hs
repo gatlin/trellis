@@ -48,6 +48,7 @@ tests =
     , adjustRefsTests
     , roundTripTests
     , prefixCollisionTests
+    , randTests
     ]
 
 arithmeticTests :: TestTree
@@ -310,6 +311,30 @@ prefixCollisionTests =
         eval "ROUNDUP(2.1,0)" @?= VNum 3
     , testCase "ROUNDDOWN doesn't get cut short as ROUND" $
         eval "ROUNDDOWN(2.9,0)" @?= VNum 2
+    ]
+
+randTests :: TestTree
+randTests =
+  testGroup
+    "RAND"
+    [ testCase "parses and produces a VNum" $
+        case eval "RAND()" of
+          VNum _ -> pure ()
+          other -> assertBool ("expected VNum, got " ++ show other) False
+    , testCase "value is in [0,1)" $
+        case eval "RAND()" of
+          VNum n -> assertBool "RAND should be in [0,1)" (n >= 0 && n < 1)
+          other -> assertBool ("expected VNum, got " ++ show other) False
+    , testCase "different cells get different values" $
+        let v1 = compile (0, 0) (Expr RandF) (evaluated Map.empty)
+            v2 = compile (1, 0) (Expr RandF) (evaluated Map.empty)
+         in assertBool "different cells should produce different values" (v1 /= v2)
+    , testCase "round-trips through renderExpr" $
+        case parseExpr "RAND()" of
+          Left err -> assertBool ("failed to parse: " ++ err) False
+          Right expr -> case parseExpr (renderExpr expr) of
+            Left err -> assertBool ("re-parse failed: " ++ err) False
+            Right expr2 -> expr @?= expr2
     ]
 
 {- [^1]:

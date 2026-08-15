@@ -102,6 +102,10 @@ data ExprF a
   | ToStringF a
   | ToNumberF a
   | IfF a a a
+  | {- | A zero-argument pseudo-random number in @[0,1)@, deterministic
+    per cell position.
+    -}
+    RandF
   | -- | A one-argument built-in - see "Formula.Builtins".
     Call1F Fn1Op a
   | -- | A two-argument built-in.
@@ -278,6 +282,7 @@ compile here (Expr (ToStringF a)) =
   toStringV . compile here a
 compile here (Expr (ToNumberF a)) =
   toNumberV . compile here a
+compile (hx, hy) (Expr RandF) = const (VNum (pseudoRand hx hy))
 compile here (Expr (IfF c t e)) =
   \sh -> ifV (compile here c sh) (compile here t sh) (compile here e sh)
 compile here (Expr (Call1F op a)) =
@@ -335,6 +340,7 @@ renderExpr = render 0
   render _ (Expr (ToStringF a)) = call "STR" [a]
   render _ (Expr (ToNumberF a)) = call "NUM" [a]
   render _ (Expr (IfF c t e)) = call "IF" [c, t, e]
+  render _ (Expr RandF) = "RAND()"
   render _ (Expr (Call1F op a)) = call (fn1Name op) [a]
   render _ (Expr (Call2F op a b)) = call (fn2Name op) [a, b]
   render _ (Expr (Call3F op a b c)) = call (fn3Name op) [a, b, c]
@@ -367,6 +373,15 @@ renderExpr = render 0
   quote s = "\"" ++ concatMap escape s ++ "\""
   escape '"' = "\\\""
   escape c = [c]
+
+{- | Deterministic pseudo-random in @[0,1)@ derived from cell coordinates.
+Each cell gets a distinct stable value; re-evaluating the same sheet
+yields the same numbers.
+-}
+pseudoRand :: Int -> Int -> Double
+pseudoRand x y =
+  let h = abs (x * 374761393 + y * 668265263 + 1013904223) `mod` 100000
+   in fromIntegral h / 100000
 
 {- | A finite window of already-evaluated cells, @cols@ wide and @rows@
 tall, with @(x, y)@ as its top-left corner. Outer list is rows, inner is

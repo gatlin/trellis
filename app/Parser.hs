@@ -14,6 +14,7 @@ term     ::= factor (('*' | '/') factor)*
 factor   ::= number | string | bool | ref | call | '(' expr ')' | '-' factor
 ref      ::= '\@' int ',' int
 call     ::= 'IF' '(' expr ',' expr ',' expr ')'
+           | 'RAND' '(' ')'
            | 'AND' '(' expr ',' expr ')' | 'OR' '(' expr ',' expr ')'
            | 'NOT' '(' expr ')' | 'STR' '(' expr ')' | 'NUM' '(' expr ')'
            | fn1 '(' expr ')' | fn2 '(' expr ',' expr ')'
@@ -167,7 +168,8 @@ parensP = char '(' *> skipSpace *> compareP <* skipSpace <* char ')'
 callP :: Parser Expr
 callP =
   choice
-    [ ifP
+    [ randP
+    , ifP
     , andP
     , orP
     , notP
@@ -209,6 +211,9 @@ callP =
     , midP
     , substituteP
     ]
+
+randP :: Parser Expr
+randP = string "RAND" *> skipSpace *> char '(' *> skipSpace *> char ')' *> pure (Expr RandF)
 
 ifP :: Parser Expr
 ifP = do
