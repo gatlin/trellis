@@ -30,6 +30,7 @@ module SheetState (
   clampOrigin,
   cellAt,
   clampRange,
+  cellsInSelection,
 ) where
 
 import qualified Data.Map.Strict as Map
@@ -162,3 +163,15 @@ initialState =
 -- | How close together two clicks on the same cell must be to count as one.
 doubleClickWindow :: NominalDiffTime
 doubleClickWindow = 0.4
+
+{- | Enumerate all cell positions covered by a selection rectangle.
+If no selection is active, returns just the cursor cell.
+The two corners of the selection may be given in either order.
+-}
+cellsInSelection :: (Int, Int) -> Maybe ((Int, Int), (Int, Int)) -> [(Int, Int)]
+cellsInSelection cursor Nothing = [cursor]
+cellsInSelection _ (Just ((x1, y1), (x2, y2))) =
+  [ (x, y)
+  | x <- [min x1 x2 .. max x1 x2]
+  , y <- [min y1 y2 .. max y1 y2]
+  ]

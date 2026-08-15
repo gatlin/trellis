@@ -28,6 +28,7 @@ import SheetState (
   LiveBinding (..),
   SheetState (..),
   cellAt,
+  cellsInSelection,
   doubleClickWindow,
  )
 import qualified Termbox2 as Tb2
@@ -238,8 +239,15 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
 
   clearFocusedCell = do
     st <- UI.get
-    cancelSubscription (cursor st)
-    UI.modify (\st' -> st'{cells = Map.delete (cursor st) (cells st')})
+    let targets = cellsInSelection (cursor st) (selection st)
+    forM_ targets cancelSubscription
+    UI.modify
+      ( \st' ->
+          st'
+            { cells = foldr Map.delete (cells st') targets
+            , selection = Nothing
+            }
+      )
 
   -- \| Writes the sheet back to the file it was loaded from - a no-op
   -- if Trellis wasn't started with one, since there's no "save as" yet.

@@ -5,6 +5,7 @@ import SheetState (
   ChartType (..),
   FillSource (..),
   cellAt,
+  cellsInSelection,
   clampAxis,
   clampRange,
   classifyChartRange,
@@ -28,6 +29,7 @@ tests =
     , previewRectTests
     , classifyChartRangeTests
     , heatmapStepTests
+    , cellsInSelectionTests
     ]
 
 clampAxisTests :: TestTree
@@ -155,4 +157,29 @@ heatmapStepTests =
         heatmapStep 5 (0, 10) (-0.001) @?= 0
     , testCase "clamps a value fractionally above the maximum" $
         heatmapStep 5 (0, 10) 10.001 @?= 4
+    ]
+
+cellsInSelectionTests :: TestTree
+cellsInSelectionTests =
+  testGroup
+    "cellsInSelection"
+    [ testCase "no selection returns just the cursor" $
+        cellsInSelection (3, 4) Nothing @?= [(3, 4)]
+    , testCase "a 1x1 selection returns that single cell" $
+        cellsInSelection (2, 2) (Just ((2, 2), (2, 2))) @?= [(2, 2)]
+    , testCase "a 2x2 selection returns all four cells" $
+        cellsInSelection (0, 0) (Just ((1, 1), (2, 2)))
+          @?= [(1, 1), (1, 2), (2, 1), (2, 2)]
+    , testCase "corners in reverse order produce the same rectangle" $
+        cellsInSelection (0, 0) (Just ((2, 2), (1, 1)))
+          @?= [(1, 1), (1, 2), (2, 1), (2, 2)]
+    , testCase "a row selection (1 row, multiple cols)" $
+        cellsInSelection (0, 0) (Just ((1, 3), (4, 3)))
+          @?= [(1, 3), (2, 3), (3, 3), (4, 3)]
+    , testCase "a column selection (multiple rows, 1 col)" $
+        cellsInSelection (0, 0) (Just ((2, 1), (2, 4)))
+          @?= [(2, 1), (2, 2), (2, 3), (2, 4)]
+    , testCase "a 3x4 block returns all 12 cells" $
+        cellsInSelection (0, 0) (Just ((0, 0), (2, 3)))
+          @?= [ (x, y) | x <- [0 .. 2], y <- [0 .. 3] ]
     ]
