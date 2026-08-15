@@ -12,14 +12,15 @@ import Render.Theme (
   strFg,
   textBg,
   textFg,
-  valueColors
-)
+  valueColors,
+ )
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit ((@=?), testCase)
+import Test.Tasty.HUnit (testCase, (@=?))
 
 tests :: TestTree
 tests =
-  testGroup "Render.Theme"
+  testGroup
+    "Render.Theme"
     [ testCase "VBlank maps to default text colors" $
         valueColors VBlank @=? (textFg, textBg)
     , testCase "VNum maps to orange" $
