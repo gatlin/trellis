@@ -218,13 +218,13 @@ apply1 LowerOp = mapText (VStr . map toLower)
 apply1 TrimOp = mapText (VStr . unwords . words)
 apply1 YearOp = \v -> case dateVal v of
   Left e -> VErr e
-  Right d -> VNum (fromIntegral (fst (toGregorian d)))
+  Right d -> let (y, _, _) = toGregorian d in VNum (fromIntegral y)
 apply1 MonthOp = \v -> case dateVal v of
   Left e -> VErr e
-  Right d -> VNum (fromIntegral (snd (toGregorian d)))
+  Right d -> let (_, m, _) = toGregorian d in VNum (fromIntegral m)
 apply1 DayOp = \v -> case dateVal v of
   Left e -> VErr e
-  Right d -> VNum (fromIntegral (snd (snd (toGregorian d))))
+  Right d -> let (_, _, dom) = toGregorian d in VNum (fromIntegral dom)
 apply1 DateOp = mapText $ \s -> case reads (dropWhile isSpace s) of
   [(d, rest)] | all isSpace rest -> VDate d
   _ -> VErr ("can't parse date: " ++ s)
@@ -280,8 +280,12 @@ apply3 DateDiffOp d1 d2 unit = case (dateVal d1, dateVal d2, text unit) of
   (_, _, Left e) -> VErr e
   (Right a, Right b, Right u) -> case u of
     (c : _) -> case toLower c of
-      'y' -> VNum (fromIntegral (fst (toGregorian b) - fst (toGregorian a)))
-      'm' -> VNum (fromIntegral ((fst (toGregorian b) - fst (toGregorian a)) * 12 + (snd (toGregorian b) - snd (toGregorian a))))
+      'y' -> let (ya, _, _) = toGregorian a
+                   (yb, _, _) = toGregorian b
+             in VNum (fromIntegral (yb - ya))
+      'm' -> let (ya, ma, _) = toGregorian a
+                   (yb, mb, _) = toGregorian b
+             in VNum (fromIntegral ((yb - ya) * 12 + (mb - ma)))
       'd' -> VNum (fromIntegral (diffDays b a))
       _ -> VErr "DATEDIF unit must be \"Y\", \"M\", or \"D\""
     [] -> VErr "DATEDIF unit must be \"Y\", \"M\", or \"D\""
