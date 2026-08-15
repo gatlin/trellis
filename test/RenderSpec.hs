@@ -12,7 +12,7 @@ import Render.Theme (
   strFg,
   textBg,
   textFg,
-  valueColors,
+  valueColors
 )
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit ((@=?), testCase)
