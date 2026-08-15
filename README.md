@@ -88,7 +88,7 @@ support and 256 colors.
 app/
   Main.hs              -- entry point, wires everything together
   Cli.hs               -- command-line argument parsing
-  Parser.hs            -- hand-written recursive-descent formula parser
+  Parser.hs            -- recursive-descent formula parser (Attoparsec)
   Formula.hs           -- expression AST (Expr, Op, etc.)
   Formula/Builtins.hs  -- Value type, showValue, aggregation, function eval
   SheetFile.hs         -- plain-text sheet file parse/serialize
@@ -156,15 +156,19 @@ way a type mismatch surfaces.
 
 ## Parser
 
-The formula parser in `app/Parser.hs` is a hand-written
-recursive-descent parser. It is **not** `megaparsec`, `attoparsec`,
-or `parsec`. Precedence levels from lowest to highest:
+The formula parser in `app/Parser.hs` is a recursive-descent parser
+built on `Data.Attoparsec.Text`. The grammar is structured in explicit
+precedence levels, each a named function that calls the next:
 
 1. Comparison (`=`, `<>`, `<`, `>`, `<=`, `>=`)
 2. Additive (`+`, `-`, `&` for string concatenation)
 3. Multiplicative (`*`, `/`)
 4. Unary minus
 5. Atoms (numbers, quoted strings, booleans, cell refs, function calls, `IF`)
+
+The `choice` combinator is used at the atom level to try each
+alternative in order. The `Parser` type is Attoparsec's, and the
+`<|>` operator comes from `Control.Applicative`.
 
 To add a new builtin function, touch three files:
 
