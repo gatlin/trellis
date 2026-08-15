@@ -31,6 +31,7 @@ import Data.Char (isSpace, toLower, toUpper)
 import Data.List (isPrefixOf, sort)
 import Data.Time.Calendar (
   Day,
+  addDays,
   addGregorianMonthsClip,
   diffDays,
   toGregorian,
@@ -271,7 +272,7 @@ apply3 DateAddOp date n unit = case (dateVal date, numeric n, text unit) of
     (c : _) -> case toLower c of
       'y' -> VDate (addGregorianMonthsClip (round num * 12) d)
       'm' -> VDate (addGregorianMonthsClip (round num) d)
-      'd' -> VDate (d + (round num :: Int))
+      'd' -> VDate (addDays d (round num))
       _ -> VErr "DATEADD unit must be \"Y\", \"M\", or \"D\""
     [] -> VErr "DATEADD unit must be \"Y\", \"M\", or \"D\""
 apply3 DateDiffOp d1 d2 unit = case (dateVal d1, dateVal d2, text unit) of
