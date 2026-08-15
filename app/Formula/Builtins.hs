@@ -31,12 +31,9 @@ import Data.Char (isSpace, toLower, toUpper)
 import Data.List (isPrefixOf, sort)
 import Data.Time.Calendar (
   Day,
-  addGregorianMonthsClamped,
-  dayOfMonth,
+  addGregorianMonthsClip,
   diffDays,
-  month,
   toGregorian,
-  year,
  )
 
 -- | What a cell displays once evaluated.
@@ -221,13 +218,13 @@ apply1 LowerOp = mapText (VStr . map toLower)
 apply1 TrimOp = mapText (VStr . unwords . words)
 apply1 YearOp = \v -> case dateVal v of
   Left e -> VErr e
-  Right d -> VNum (fromIntegral (year d))
+  Right d -> VNum (fromIntegral (fst (toGregorian d)))
 apply1 MonthOp = \v -> case dateVal v of
   Left e -> VErr e
-  Right d -> VNum (fromIntegral (month d))
+  Right d -> VNum (fromIntegral (snd (toGregorian d)))
 apply1 DayOp = \v -> case dateVal v of
   Left e -> VErr e
-  Right d -> VNum (fromIntegral (dayOfMonth d))
+  Right d -> VNum (fromIntegral (thd (toGregorian d)))
 apply1 DateOp = mapText $ \s -> case reads (dropWhile isSpace s) of
   [(d, rest)] | all isSpace rest -> VDate d
   _ -> VErr ("can't parse date: " ++ s)
@@ -272,8 +269,8 @@ apply3 DateAddOp date n unit = case (dateVal date, numeric n, text unit) of
   (_, _, Left e) -> VErr e
   (Right d, Right num, Right u) -> case u of
     (c : _) -> case toLower c of
-      'y' -> VDate (addGregorianMonthsClamped (round num * 12) d)
-      'm' -> VDate (addGregorianMonthsClamped (round num) d)
+      'y' -> VDate (addGregorianMonthsClip (round num * 12) d)
+      'm' -> VDate (addGregorianMonthsClip (round num) d)
       'd' -> VDate (d + round num)
       _ -> VErr "DATEADD unit must be \"Y\", \"M\", or \"D\""
     [] -> VErr "DATEADD unit must be \"Y\", \"M\", or \"D\""
@@ -283,8 +280,8 @@ apply3 DateDiffOp d1 d2 unit = case (dateVal d1, dateVal d2, text unit) of
   (_, _, Left e) -> VErr e
   (Right a, Right b, Right u) -> case u of
     (c : _) -> case toLower c of
-      'y' -> VNum (fromIntegral (year b - year a))
-      'm' -> VNum (fromIntegral ((year b - year a) * 12 + (month b - month a)))
+      'y' -> VNum (fromIntegral (fst (toGregorian b) - fst (toGregorian a)))
+      'm' -> VNum (fromIntegral ((fst (toGregorian b) - fst (toGregorian a)) * 12 + (snd (toGregorian b) - snd (toGregorian a))))
       'd' -> VNum (fromIntegral (diffDays b a))
       _ -> VErr "DATEDIF unit must be \"Y\", \"M\", or \"D\""
     [] -> VErr "DATEDIF unit must be \"Y\", \"M\", or \"D\""
