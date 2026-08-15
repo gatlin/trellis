@@ -374,6 +374,7 @@ aggregate op vals = case traverse asNumbers vals of
   asNumbers (VErr e) = Left e
   asNumbers (VStr _) = Left "expected a number, got text (try NUM(...))"
   asNumbers (VBool _) = Left "expected a number, got a boolean"
+  asNumbers (VDate _) = Left "expected a number, got a date"
 
 reduceAgg :: AggOp -> [Double] -> Value
 reduceAgg SumOp ns = VNum (sum ns)
