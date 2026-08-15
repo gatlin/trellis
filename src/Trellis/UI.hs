@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE ExistentialQuantification #-}
@@ -273,9 +274,17 @@ mount run setup !component = do
   let ?ref = ref
       ?run = Runner run
   bracket_
-    (Tb2.runTermbox2 (Tb2.init >> setup))
+    (Tb2.runTermbox2 (tbInit >> setup))
     (Tb2.runTermbox2 Tb2.shutdown)
     (Tb2.runTermbox2 $ deliver $ events >< loopOrQuit >< display)
+ where
+  -- 'Tb2.init' opens /dev/tty directly, which doesn't exist on Windows -
+  -- 'Tb2.initRwFd' against stdin/stdout (fds 0/1) instead, there.
+#if defined(mingw32_HOST_OS)
+  tbInit = Tb2.initRwFd (0 :: Int) (1 :: Int)
+#else
+  tbInit = Tb2.init
+#endif
 
 -- = Part 3: Drawing utilities.
 
