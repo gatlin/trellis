@@ -34,9 +34,9 @@ module Formula (
 import Data.Char (isSpace)
 import Data.Functor.Rep (Representable (..))
 import Data.List (intercalate)
-import Data.Time (zonedTimeToUTC)
+import Data.Time (getZonedTime, zonedTimeToUTC)
 import Data.Time.Calendar (Day, toGregorian)
-import Data.Time.Clock (UTCTime (..), getZonedTime)
+import Data.Time.Clock (UTCTime (..))
 import qualified Data.Map.Strict as Map
 import GHC.IO.Unsafe (unsafePerformIO)
 import Formula.Builtins (
