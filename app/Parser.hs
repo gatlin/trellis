@@ -139,7 +139,7 @@ literal. Placed last in 'factorP' so all other atoms take priority.
 bareWordP :: Parser Expr
 bareWordP = Expr . StrLitF <$> word
  where
-  word = (:) <$> (satisfy isAlpha <|> char '_') <*> many (satisfy isAlphaNum <|> char '_')
+  word = (:) <$> (satisfy isAlpha <|> char '_') <*> many' (satisfy isAlphaNum <|> char '_')
 
 -- | The @x, y@ pair inside a '@x,y' reference, shared with 'rangeP'.
 coordP :: Parser (Int, Int)
