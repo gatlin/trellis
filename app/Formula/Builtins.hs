@@ -29,6 +29,7 @@ module Formula.Builtins (
 
 import Data.Char (isSpace, toLower, toUpper)
 import Data.List (isPrefixOf, sort)
+import Data.Tuple (thd)
 import Data.Time.Calendar (
   Day,
   addGregorianMonthsClip,
