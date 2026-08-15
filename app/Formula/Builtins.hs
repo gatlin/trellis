@@ -29,7 +29,6 @@ module Formula.Builtins (
 
 import Data.Char (isSpace, toLower, toUpper)
 import Data.List (isPrefixOf, sort)
-import Data.Tuple (thd)
 import Data.Time.Calendar (
   Day,
   addGregorianMonthsClip,
@@ -225,7 +224,7 @@ apply1 MonthOp = \v -> case dateVal v of
   Right d -> VNum (fromIntegral (snd (toGregorian d)))
 apply1 DayOp = \v -> case dateVal v of
   Left e -> VErr e
-  Right d -> VNum (fromIntegral (thd (toGregorian d)))
+  Right d -> VNum (fromIntegral (snd (snd (toGregorian d))))
 apply1 DateOp = mapText $ \s -> case reads (dropWhile isSpace s) of
   [(d, rest)] | all isSpace rest -> VDate d
   _ -> VErr ("can't parse date: " ++ s)
