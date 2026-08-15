@@ -24,7 +24,7 @@ jobs:
         shell: pwsh
 
       - name: Build
-        run: cabal build exe:trellis
+        run: cabal build exe:trellis -v3
         shell: pwsh
 
       - name: Stage exe
