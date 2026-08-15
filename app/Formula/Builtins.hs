@@ -280,12 +280,14 @@ apply3 DateDiffOp d1 d2 unit = case (dateVal d1, dateVal d2, text unit) of
   (_, _, Left e) -> VErr e
   (Right a, Right b, Right u) -> case u of
     (c : _) -> case toLower c of
-      'y' -> let (ya, _, _) = toGregorian a
-                   (yb, _, _) = toGregorian b
-             in VNum (fromIntegral (yb - ya))
-      'm' -> let (ya, ma, _) = toGregorian a
-                   (yb, mb, _) = toGregorian b
-             in VNum (fromIntegral ((yb - ya) * 12 + (mb - ma)))
+      'y' ->
+        let (ya, _, _) = toGregorian a
+            (yb, _, _) = toGregorian b
+         in VNum (fromIntegral (yb - ya))
+      'm' ->
+        let (ya, ma, _) = toGregorian a
+            (yb, mb, _) = toGregorian b
+         in VNum (fromIntegral ((yb - ya) * 12 + (mb - ma)))
       'd' -> VNum (fromIntegral (diffDays b a))
       _ -> VErr "DATEDIF unit must be \"Y\", \"M\", or \"D\""
     [] -> VErr "DATEDIF unit must be \"Y\", \"M\", or \"D\""
