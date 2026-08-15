@@ -11,7 +11,8 @@ expr     ::= compare
 compare  ::= additive (('=' | '<>' | '<=' | '>=' | '<' | '>') additive)?
 additive ::= term (('+' | '-' | '&') term)*
 term     ::= factor (('*' | '/') factor)*
-factor   ::= number | string | bool | ref | call | '(' expr ')' | '-' factor
+factor   ::= number | string | bool | ref | call | '(' expr ')' | '-' factor | bareword
+bareword ::= [a-zA-Z_][a-zA-Z0-9_]*   -- unquoted string literal
 ref      ::= '\@' int ',' int
 call     ::= 'IF' '(' expr ',' expr ',' expr ')'
            | 'RAND' '(' ')'
@@ -40,6 +41,7 @@ module Parser (parseExpr) where
 
 import Control.Applicative ((<|>))
 import Data.Attoparsec.Text
+import Data.Char (isAlpha, isAlphaNum)
 import qualified Data.Text as T
 import Formula (
   AggOp (..),
@@ -109,7 +111,7 @@ termP = factorP >>= rest
       <|> pure acc
 
 factorP :: Parser Expr
-factorP = skipSpace *> choice [refP, callP, boolP, stringP, negP, parensP, litP]
+factorP = skipSpace *> choice [refP, callP, boolP, stringP, negP, parensP, litP, bareWordP]
 
 litP :: Parser Expr
 litP = Expr . NumLitF <$> double
@@ -129,6 +131,15 @@ negP = char '-' *> skipSpace *> (asNegative <$> factorP)
  where
   asNegative (Expr (NumLitF n)) = Expr (NumLitF (negate n))
   asNegative e = Expr (ArithF Sub (Expr (NumLitF 0)) e)
+
+{- | A bare word (identifier-like token) that didn't match any known
+function, keyword, or cell reference - parsed as an unquoted string
+literal. Placed last in 'factorP' so all other atoms take priority.
+-}
+bareWordP :: Parser Expr
+bareWordP = Expr . StrLitF <$> word
+ where
+  word = (:) <$> (satisfy isAlpha <|> char '_') <*> many (satisfy isAlphaNum <|> char '_')
 
 -- | The @x, y@ pair inside a '@x,y' reference, shared with 'rangeP'.
 coordP :: Parser (Int, Int)

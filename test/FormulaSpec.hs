@@ -49,6 +49,7 @@ tests =
     , roundTripTests
     , prefixCollisionTests
     , randTests
+    , unquotedStringTests
     ]
 
 arithmeticTests :: TestTree
@@ -335,6 +336,43 @@ randTests =
           Right expr -> case parseExpr (renderExpr expr) of
             Left err -> assertBool ("re-parse failed: " ++ err) False
             Right expr2 -> expr @?= expr2
+    ]
+
+unquotedStringTests :: TestTree
+unquotedStringTests =
+  testGroup
+    "unquoted strings"
+    [ testCase "a bare word parses as a string" $ eval "hello" @?= VStr "hello"
+    , testCase "mixed-case bare word" $ eval "Hello" @?= VStr "Hello"
+    , testCase "bare word with digits" $ eval "foo123" @?= VStr "foo123"
+    , testCase "bare word with underscore" $ eval "my_var" @?= VStr "my_var"
+    , testCase "single letter" $ eval "a" @?= VStr "a"
+    , testCase "a word that looks like a function name but isn't called" $
+        eval "SUM" @?= VStr "SUM"
+    , testCase "a word that is a prefix of a function name" $
+        eval "SUMX" @?= VStr "SUMX"
+    , testCase "bare word in concatenation" $
+        eval "hello&\" world\"" @?= VStr "hello world"
+    , testCase "bare word in comparison" $
+        eval "hello=\"hello\"" @?= VBool True
+    , testCase "bare word in IF" $
+        eval "IF(TRUE,hello,\"no\")" @?= VStr "hello"
+    , testCase "bare word in STR" $
+        eval "STR(hello)" @?= VStr "hello"
+    , testCase "bare word in NUM is an error" $
+        assertBool "expected a VErr" (isErr (eval "NUM(hello)"))
+    , testCase "existing function calls still work" $
+        eval "ABS(-5)" @?= VNum 5
+    , testCase "existing booleans still work" $
+        eval "TRUE" @?= VBool True
+    , testCase "existing cell refs still work" $
+        evalFormula (Map.fromList [numAt (1, 2) 42]) "@1,2" @?= VNum 42
+    , testCase "existing quoted strings still work" $
+        eval "\"hello\"" @?= VStr "hello"
+    , testCase "bare word followed by operator is a parse error" $
+        case parseExpr "hello world" of
+          Left _ -> pure ()
+          Right e -> assertBool ("expected parse failure, got " ++ show e) False
     ]
 
 {- [^1]:
