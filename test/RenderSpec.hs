@@ -15,7 +15,7 @@ import Render.Theme (
   valueColors,
  )
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit (testCase, (@=?))
+import Test.Tasty.HUnit (assertBool, testCase, (@=?))
 
 tests :: TestTree
 tests =
@@ -32,9 +32,9 @@ tests =
     , testCase "VErr maps to red" $
         valueColors (VErr "boom") @=? (errFg, errBg)
     , testCase "strBg differs from textBg (header contrast)" $
-        strBg /= textBg
+        assertBool "strBg should differ from textBg" (strBg /= textBg)
     , testCase "numFg differs from textFg (type distinction)" $
-        numFg /= textFg
+        assertBool "numFg should differ from textFg" (numFg /= textFg)
     , testCase "errFg differs from boolFg (error vs boolean)" $
-        errFg /= boolFg
+        assertBool "errFg should differ from boolFg" (errFg /= boolFg)
     ]
