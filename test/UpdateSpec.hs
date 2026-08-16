@@ -154,20 +154,20 @@ zoomKeyTests :: TestTree
 zoomKeyTests =
   testGroup
     "zoom keys"
-    [ testCase "Ctrl+= matches zoomIn binding" $
-        matches (Plain (Key Tb2.keyCtrlEqual)) (keyEvent Tb2.keyCtrlEqual)
+    [ testCase "'=' matches zoomIn binding" $
+        matches (Plain (Char '=')) (charEvent '=')
           @?= True
-    , testCase "Ctrl+- matches zoomOut binding" $
-        matches (Plain (Key Tb2.keyCtrlMinus)) (keyEvent Tb2.keyCtrlMinus)
+    , testCase "'-' matches zoomOut binding" $
+        matches (Plain (Char '-')) (charEvent '-')
           @?= True
-    , testCase "Ctrl+0 matches zoomReset binding" $
-        matches (Plain (Key Tb2.keyCtrl0)) (keyEvent Tb2.keyCtrl0)
+    , testCase "'0' matches zoomReset binding" $
+        matches (Plain (Char '0')) (charEvent '0')
           @?= True
-    , testCase "Ctrl+= does not match an unrelated key" $
-        matches (Plain (Key Tb2.keyCtrlEqual)) (keyEvent Tb2.keyArrowUp)
+    , testCase "'=' does not match an unrelated key" $
+        matches (Plain (Char '=')) (keyEvent Tb2.keyArrowUp)
           @?= False
-    , testCase "Ctrl+= does not match a mouse event" $
-        matches (Plain (Key Tb2.keyCtrlEqual)) (mouseEvent Tb2.keyMouseLeft False)
+    , testCase "'=' does not match a mouse event" $
+        matches (Plain (Char '=')) (mouseEvent Tb2.keyMouseLeft False)
           @?= False
     ]
 
