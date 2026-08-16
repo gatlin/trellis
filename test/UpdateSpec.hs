@@ -64,6 +64,7 @@ tests =
     , pageKeyTests
     , fillKeyTests
     , clearCellKeyTests
+    , editKeyTests
     ]
 
 isKeyIsMouseTests :: TestTree
@@ -211,6 +212,21 @@ clearCellKeyTests =
           @?= False
     , testCase "Delete does not match a mouse event" $
         matches (Plain (Key Tb2.keyDelete)) (mouseEvent Tb2.keyMouseLeft False)
+          @?= False
+    ]
+
+editKeyTests :: TestTree
+editKeyTests =
+  testGroup
+    "editKey (F2)"
+    [ testCase "F2 matches editKey binding" $
+        matches (Plain (Key Tb2.keyF2)) (keyEvent Tb2.keyF2)
+          @?= True
+    , testCase "F2 does not match an unrelated key" $
+        matches (Plain (Key Tb2.keyF2)) (keyEvent Tb2.keyArrowUp)
+          @?= False
+    , testCase "F2 does not match a mouse event" $
+        matches (Plain (Key Tb2.keyF2)) (mouseEvent Tb2.keyMouseLeft False)
           @?= False
     ]
 

@@ -115,6 +115,8 @@ data KeyMap = KeyMap
   -}
   , saveKey :: Binding
   -- ^ Writes the sheet back to the file it was loaded from, if any.
+  , editKey :: Binding
+  -- ^ Opens the formula editor for the focused cell (same as 'confirm').
   , selectUp, selectDown, selectLeft, selectRight :: Binding
   {- ^ Extend a selection from the keyboard - alongside Shift+Arrow, which
   isn't itself configurable (see "Update.Events.isShiftKey"). Some
@@ -160,6 +162,7 @@ defaultKeyMap =
     , lineChartKey = Plain (Char 'l')
     , heatmapKey = Plain (Char 'h')
     , saveKey = Plain (Key Tb2.keyCtrlS)
+    , editKey = Plain (Key Tb2.keyF2)
     , selectUp = WithAlt (Key Tb2.keyArrowUp)
     , selectDown = WithAlt (Key Tb2.keyArrowDown)
     , selectLeft = WithAlt (Key Tb2.keyArrowLeft)
@@ -188,6 +191,7 @@ namedKeys =
   , ("PageUp", Tb2.keyPgUp)
   , ("PageDown", Tb2.keyPgDn)
   , ("Ctrl+S", Tb2.keyCtrlS)
+  , ("F2", Tb2.keyF2)
   ]
 
 {- | Maps a config setting name to the 'KeyMap' field it updates (full
@@ -217,6 +221,7 @@ bindingSetters =
   , ("lineChartKey", \k m -> m{lineChartKey = k})
   , ("heatmapKey", \k m -> m{heatmapKey = k})
   , ("saveKey", \k m -> m{saveKey = k})
+  , ("editKey", \k m -> m{editKey = k})
   , ("selectUp", \k m -> m{selectUp = k})
   , ("selectDown", \k m -> m{selectDown = k})
   , ("selectLeft", \k m -> m{selectLeft = k})
@@ -346,6 +351,7 @@ defaultConfigText =
     , "lineChartKey = l"
     , "heatmapKey = h"
     , "saveKey = Ctrl+S"
+    , "editKey = F2"
     , "selectUp = Alt+ArrowUp"
     , "selectDown = Alt+ArrowDown"
     , "selectLeft = Alt+ArrowLeft"

@@ -176,6 +176,7 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
         commitFill
         UI.modify (\st -> st{panAnchor = Nothing, fillDrag = Nothing})
     | matches (confirm keymap) evt = beginEditHere
+    | matches (editKey keymap) evt = beginEditHere
     | matches (clearCell keymap) evt = clearFocusedCell
     | matches (barChartKey keymap) evt = toggleChart BarChart
     | matches (lineChartKey keymap) evt = toggleChart LineChart
