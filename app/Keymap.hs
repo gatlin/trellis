@@ -129,9 +129,9 @@ defaultKeyMap =
     , moveRight = Plain (Key Tb2.keyArrowRight)
     , scrollUp = MouseBinding Tb2.keyMouseWheelUp False
     , scrollDown = MouseBinding Tb2.keyMouseWheelDown False
-    , zoomInKey = Plain (Key Tb2.keyCtrlEqual)
-    , zoomOutKey = Plain (Key Tb2.keyCtrlMinus)
-    , zoomResetKey = Plain (Key Tb2.keyCtrl0)
+    , zoomInKey = Plain (Char '=')
+    , zoomOutKey = Plain (Char '-')
+    , zoomResetKey = Plain (Char '0')
     , pageUp = Plain (Key Tb2.keyPgUp)
     , pageDown = Plain (Key Tb2.keyPgDn)
     , selectButton = MouseBinding Tb2.keyMouseLeft False
@@ -172,9 +172,6 @@ namedKeys =
   , ("PageUp", Tb2.keyPgUp)
   , ("PageDown", Tb2.keyPgDn)
   , ("Ctrl+S", Tb2.keyCtrlS)
-  , ("Ctrl+=", Tb2.keyCtrlEqual)
-  , ("Ctrl+-", Tb2.keyCtrlMinus)
-  , ("Ctrl+0", Tb2.keyCtrl0)
   ]
 
 {- | Maps a config setting name to the 'KeyMap' field it updates (full
@@ -273,8 +270,7 @@ defaultConfigText =
     , "# itself, so it's rejected rather than silently never firing."
     , "# Named keys: ArrowUp, ArrowDown, ArrowLeft, ArrowRight, WheelUp,"
     , "# WheelDown, MouseLeft, MouseRight, MouseMiddle, Enter, Escape,"
-    , "# Delete, Tab, Space, Home, End, PageUp, PageDown, Ctrl+S, Ctrl+=,"
-    , "# Ctrl+-, Ctrl+0."
+    , "# Delete, Tab, Space, Home, End, PageUp, PageDown, Ctrl+S."
     , "#"
     , "# scrollUp/scrollDown zoom the grid in and out. selectButton,"
     , "# panButton, fillButton: mouse-only settings may additionally be"
@@ -305,9 +301,9 @@ defaultConfigText =
     , "moveRight = ArrowRight"
     , "scrollUp = WheelUp"
     , "scrollDown = WheelDown"
-    , "zoomInKey = Ctrl+="
-    , "zoomOutKey = Ctrl+-"
-    , "zoomResetKey = Ctrl+0"
+    , "zoomInKey = ="
+    , "zoomOutKey = -"
+    , "zoomResetKey = 0"
     , "pageUp = PageUp"
     , "pageDown = PageDown"
     , "selectButton = MouseLeft"
