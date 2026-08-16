@@ -63,6 +63,7 @@ tests =
     , zoomKeyTests
     , pageKeyTests
     , fillKeyTests
+    , clearCellKeyTests
     ]
 
 isKeyIsMouseTests :: TestTree
@@ -197,6 +198,21 @@ fillKeyTests =
 ctrlCharEvent :: Char -> Tb2.Tb2Event
 ctrlCharEvent c =
   (charEvent c){Tb2._mod = Tb2.modCtrl}
+
+clearCellKeyTests :: TestTree
+clearCellKeyTests =
+  testGroup
+    "clearCell key"
+    [ testCase "Delete matches clearCell binding" $
+        matches (Plain (Key Tb2.keyDelete)) (keyEvent Tb2.keyDelete)
+          @?= True
+    , testCase "Delete does not match an unrelated key" $
+        matches (Plain (Key Tb2.keyDelete)) (keyEvent Tb2.keyArrowUp)
+          @?= False
+    , testCase "Delete does not match a mouse event" $
+        matches (Plain (Key Tb2.keyDelete)) (mouseEvent Tb2.keyMouseLeft False)
+          @?= False
+    ]
 
 pageKeyTests :: TestTree
 pageKeyTests =
