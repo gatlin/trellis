@@ -31,6 +31,7 @@ import SheetState (
   cellsInSelection,
   doubleClickWindow,
  )
+import SheetState.Geometry (initialCellWidth)
 import qualified Termbox2 as Tb2
 import Trellis.CPS (CPS, lift, reset, shift)
 import qualified Trellis.Orc as Orc
