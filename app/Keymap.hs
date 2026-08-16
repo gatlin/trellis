@@ -84,6 +84,10 @@ data KeyMap = KeyMap
   {- ^ Pan the viewport up or down by one visible page, the keyboard
   equivalent of middle-click-drag panning.
   -}
+  , panUp, panDown, panLeft, panRight :: Binding
+  {- ^ Pan the viewport by one visible page in the given direction,
+  the keyboard equivalent of middle-click-drag panning.
+  -}
   , selectButton :: MouseBinding
   -- ^ Which mouse gesture selects\/drags a cell.
   , panButton :: MouseBinding
@@ -134,6 +138,10 @@ defaultKeyMap =
     , zoomResetKey = Plain (Char '0')
     , pageUp = Plain (Key Tb2.keyPgUp)
     , pageDown = Plain (Key Tb2.keyPgDn)
+    , panUp = Plain (Key Tb2.keyCtrlArrowUp)
+    , panDown = Plain (Key Tb2.keyCtrlArrowDown)
+    , panLeft = Plain (Key Tb2.keyCtrlArrowLeft)
+    , panRight = Plain (Key Tb2.keyCtrlArrowRight)
     , selectButton = MouseBinding Tb2.keyMouseLeft False
     , panButton = MouseBinding Tb2.keyMouseMiddle False
     , fillButton = MouseBinding Tb2.keyMouseRight False
@@ -172,6 +180,10 @@ namedKeys =
   , ("PageUp", Tb2.keyPgUp)
   , ("PageDown", Tb2.keyPgDn)
   , ("Ctrl+S", Tb2.keyCtrlS)
+  , ("Ctrl+ArrowUp", Tb2.keyCtrlArrowUp)
+  , ("Ctrl+ArrowDown", Tb2.keyCtrlArrowDown)
+  , ("Ctrl+ArrowLeft", Tb2.keyCtrlArrowLeft)
+  , ("Ctrl+ArrowRight", Tb2.keyCtrlArrowRight)
   ]
 
 {- | Maps a config setting name to the 'KeyMap' field it updates (full
@@ -188,6 +200,10 @@ bindingSetters =
   , ("zoomResetKey", \k m -> m{zoomResetKey = k})
   , ("pageUp", \k m -> m{pageUp = k})
   , ("pageDown", \k m -> m{pageDown = k})
+  , ("panUp", \k m -> m{panUp = k})
+  , ("panDown", \k m -> m{panDown = k})
+  , ("panLeft", \k m -> m{panLeft = k})
+  , ("panRight", \k m -> m{panRight = k})
   , ("confirm", \k m -> m{confirm = k})
   , ("cancel", \k m -> m{cancel = k})
   , ("clearCell", \k m -> m{clearCell = k})
@@ -306,6 +322,10 @@ defaultConfigText =
     , "zoomResetKey = 0"
     , "pageUp = PageUp"
     , "pageDown = PageDown"
+    , "panUp = Ctrl+ArrowUp"
+    , "panDown = Ctrl+ArrowDown"
+    , "panLeft = Ctrl+ArrowLeft"
+    , "panRight = Ctrl+ArrowRight"
     , "selectButton = MouseLeft"
     , "panButton = MouseMiddle"
     , "fillButton = MouseRight"

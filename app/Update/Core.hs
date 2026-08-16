@@ -148,6 +148,10 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     -- same gesture as middle-click-drag but without a mouse.
     | matches (pageUp keymap) evt = panPage (0, -1)
     | matches (pageDown keymap) evt = panPage (0, 1)
+    | matches (panUp keymap) evt = panPage (0, -1)
+    | matches (panDown keymap) evt = panPage (0, 1)
+    | matches (panLeft keymap) evt = panPage (-1, 0)
+    | matches (panRight keymap) evt = panPage (1, 0)
     -- \| A fresh press of the select button: also checks for a double-click
     -- within 'doubleClickWindow', opening the cell for editing instead of
     -- just selecting it.
