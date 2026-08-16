@@ -186,7 +186,7 @@ namedKeys =
   , ("MouseLeft", Tb2.keyMouseLeft)
   , ("MouseRight", Tb2.keyMouseRight)
   , ("MouseMiddle", Tb2.keyMouseMiddle)
-  , ("Enter", Tb2.keyEnter)
+  , ("Enter", Tb2.keyCtrlEnter)
   , ("Escape", Tb2.keyCtrlEsc)
   , ("Delete", Tb2.keyDelete)
   , ("Tab", Tb2.keyCtrlTab)
