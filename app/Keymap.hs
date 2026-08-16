@@ -208,6 +208,8 @@ bindingSetters =
   , ("panDown", \k m -> m{panDown = k})
   , ("panLeft", \k m -> m{panLeft = k})
   , ("panRight", \k m -> m{panRight = k})
+  , ("fillKey", \k m -> m{fillKey = k})
+  , ("fillKeyAlt", \k m -> m{fillKeyAlt = k})
   , ("confirm", \k m -> m{confirm = k})
   , ("cancel", \k m -> m{cancel = k})
   , ("clearCell", \k m -> m{clearCell = k})
@@ -229,8 +231,6 @@ mouseKeySetters =
   , ("selectButton", \k m -> m{selectButton = k})
   , ("panButton", \k m -> m{panButton = k})
   , ("fillButton", \k m -> m{fillButton = k})
-  , ("fillKey", \k m -> m{fillKey = k})
-  , ("fillKeyAlt", \k m -> m{fillKeyAlt = k})
   ]
 
 {- | A name from 'namedKeys', or - since letters have no named key - a
