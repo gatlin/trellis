@@ -137,6 +137,12 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     | matches (moveRight keymap) evt = nudge (1, 0)
     | matchesMouse (scrollUp keymap) evt = zoomBy 1
     | matchesMouse (scrollDown keymap) evt = zoomBy (-1)
+    -- \| Keyboard zoom: the same three steps the scroll wheel gives,
+    -- plus a reset to the initial (unzoomed) width.
+    | matches (zoomInKey keymap) evt = zoomBy 1
+    | matches (zoomOutKey keymap) evt = zoomBy (-1)
+    | matches (zoomResetKey keymap) evt =
+        UI.modify (\st -> st{cellWidth = initialCellWidth})
     -- \| A fresh press of the select button: also checks for a double-click
     -- within 'doubleClickWindow', opening the cell for editing instead of
     -- just selecting it.

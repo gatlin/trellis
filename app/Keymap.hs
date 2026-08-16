@@ -76,6 +76,10 @@ matchesMouse (MouseBinding key ctrl) evt =
 data KeyMap = KeyMap
   { moveUp, moveDown, moveLeft, moveRight :: Binding
   , scrollUp, scrollDown :: MouseBinding
+  , zoomInKey, zoomOutKey, zoomResetKey :: Binding
+  {- ^ Keyboard equivalents of the scroll-wheel zoom: in, out, and reset
+  to the initial (unzoomed) cell width.
+  -}
   , selectButton :: MouseBinding
   -- ^ Which mouse gesture selects\/drags a cell.
   , panButton :: MouseBinding
@@ -121,6 +125,9 @@ defaultKeyMap =
     , moveRight = Plain (Key Tb2.keyArrowRight)
     , scrollUp = MouseBinding Tb2.keyMouseWheelUp False
     , scrollDown = MouseBinding Tb2.keyMouseWheelDown False
+    , zoomInKey = Plain (Key Tb2.keyCtrlEqual)
+    , zoomOutKey = Plain (Key Tb2.keyCtrlMinus)
+    , zoomResetKey = Plain (Key Tb2.keyCtrl0)
     , selectButton = MouseBinding Tb2.keyMouseLeft False
     , panButton = MouseBinding Tb2.keyMouseMiddle False
     , fillButton = MouseBinding Tb2.keyMouseRight False
@@ -159,6 +166,9 @@ namedKeys =
   , ("PageUp", Tb2.keyPgUp)
   , ("PageDown", Tb2.keyPgDn)
   , ("Ctrl+S", Tb2.keyCtrlS)
+  , ("Ctrl+=", Tb2.keyCtrlEqual)
+  , ("Ctrl+-", Tb2.keyCtrlMinus)
+  , ("Ctrl+0", Tb2.keyCtrl0)
   ]
 
 {- | Maps a config setting name to the 'KeyMap' field it updates (full
@@ -170,6 +180,9 @@ bindingSetters =
   , ("moveDown", \k m -> m{moveDown = k})
   , ("moveLeft", \k m -> m{moveLeft = k})
   , ("moveRight", \k m -> m{moveRight = k})
+  , ("zoomInKey", \k m -> m{zoomInKey = k})
+  , ("zoomOutKey", \k m -> m{zoomOutKey = k})
+  , ("zoomResetKey", \k m -> m{zoomResetKey = k})
   , ("confirm", \k m -> m{confirm = k})
   , ("cancel", \k m -> m{cancel = k})
   , ("clearCell", \k m -> m{clearCell = k})
@@ -252,7 +265,8 @@ defaultConfigText =
     , "# itself, so it's rejected rather than silently never firing."
     , "# Named keys: ArrowUp, ArrowDown, ArrowLeft, ArrowRight, WheelUp,"
     , "# WheelDown, MouseLeft, MouseRight, MouseMiddle, Enter, Escape,"
-    , "# Delete, Tab, Space, Home, End, PageUp, PageDown, Ctrl+S."
+    , "# Delete, Tab, Space, Home, End, PageUp, PageDown, Ctrl+S, Ctrl+=,"
+    , "# Ctrl+-, Ctrl+0."
     , "#"
     , "# scrollUp/scrollDown zoom the grid in and out. selectButton,"
     , "# panButton, fillButton: mouse-only settings may additionally be"
@@ -283,6 +297,9 @@ defaultConfigText =
     , "moveRight = ArrowRight"
     , "scrollUp = WheelUp"
     , "scrollDown = WheelDown"
+    , "zoomInKey = Ctrl+="
+    , "zoomOutKey = Ctrl+-"
+    , "zoomResetKey = Ctrl+0"
     , "selectButton = MouseLeft"
     , "panButton = MouseMiddle"
     , "fillButton = MouseRight"

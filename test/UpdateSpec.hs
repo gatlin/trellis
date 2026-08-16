@@ -3,6 +3,7 @@ module UpdateSpec (tests) where
 import qualified Termbox2 as Tb2
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
+import Keymap (BaseKey (..), Binding (..), matches)
 import Update (
   clampCursor,
   deleteAt,
@@ -59,6 +60,7 @@ tests =
     , deleteBeforeTests
     , deleteAtTests
     , clampCursorTests
+    , zoomKeyTests
     ]
 
 isKeyIsMouseTests :: TestTree
@@ -145,4 +147,25 @@ clampCursorTests =
     , testCase "below zero clamps to zero" $ clampCursor (-1) "abc" @?= 0
     , testCase "past the end clamps to the buffer's length" $
         clampCursor 99 "abc" @?= 3
+    ]
+
+zoomKeyTests :: TestTree
+zoomKeyTests =
+  testGroup
+    "zoom keys"
+    [ testCase "Ctrl+= matches zoomIn binding" $
+        matches (Plain (Key Tb2.keyCtrlEqual)) (keyEvent Tb2.keyCtrlEqual)
+          @?= True
+    , testCase "Ctrl+- matches zoomOut binding" $
+        matches (Plain (Key Tb2.keyCtrlMinus)) (keyEvent Tb2.keyCtrlMinus)
+          @?= True
+    , testCase "Ctrl+0 matches zoomReset binding" $
+        matches (Plain (Key Tb2.keyCtrl0)) (keyEvent Tb2.keyCtrl0)
+          @?= True
+    , testCase "Ctrl+= does not match an unrelated key" $
+        matches (Plain (Key Tb2.keyCtrlEqual)) (keyEvent Tb2.keyArrowUp)
+          @?= False
+    , testCase "Ctrl+= does not match a mouse event" $
+        matches (Plain (Key Tb2.keyCtrlEqual)) (mouseEvent Tb2.keyMouseLeft False)
+          @?= False
     ]
