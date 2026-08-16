@@ -41,18 +41,20 @@ data BaseKey
     Char Char
   deriving (Eq, Show)
 
--- | A 'BaseKey', optionally held down together with Alt.
-data Binding = Plain BaseKey | WithAlt BaseKey
+-- | A 'BaseKey', optionally held down together with Alt or Ctrl.
+data Binding = Plain BaseKey | WithAlt BaseKey | WithCtrl BaseKey
   deriving (Eq, Show)
 
 -- | Does an incoming event match a configured binding?
 matches :: Binding -> Tb2.Tb2Event -> Bool
-matches binding evt = base baseKey evt && altHeld == eventHasAlt
+matches binding evt = base baseKey evt && altOk && ctrlOk
  where
-  (baseKey, altHeld) = case binding of
-    Plain b -> (b, False)
-    WithAlt b -> (b, True)
-  eventHasAlt = Tb2._mod evt .&. Tb2.modAlt /= 0
+  (baseKey, wantAlt, wantCtrl) = case binding of
+    Plain b -> (b, False, False)
+    WithAlt b -> (b, True, False)
+    WithCtrl b -> (b, False, True)
+  altOk = wantAlt == (Tb2._mod evt .&. Tb2.modAlt /= 0)
+  ctrlOk = wantCtrl == (Tb2._mod evt .&. Tb2.modCtrl /= 0)
   base (Key k) e = Tb2._type e == Tb2.eventKey && Tb2._key e == k
   base (Char c) e =
     Tb2._type e == Tb2.eventKey
@@ -138,10 +140,10 @@ defaultKeyMap =
     , zoomResetKey = Plain (Char '0')
     , pageUp = Plain (Key Tb2.keyPgUp)
     , pageDown = Plain (Key Tb2.keyPgDn)
-    , panUp = Plain (Key Tb2.keyCtrlArrowUp)
-    , panDown = Plain (Key Tb2.keyCtrlArrowDown)
-    , panLeft = Plain (Key Tb2.keyCtrlArrowLeft)
-    , panRight = Plain (Key Tb2.keyCtrlArrowRight)
+    , panUp = WithCtrl (Key Tb2.keyArrowUp)
+    , panDown = WithCtrl (Key Tb2.keyArrowDown)
+    , panLeft = WithCtrl (Key Tb2.keyArrowLeft)
+    , panRight = WithCtrl (Key Tb2.keyArrowRight)
     , selectButton = MouseBinding Tb2.keyMouseLeft False
     , panButton = MouseBinding Tb2.keyMouseMiddle False
     , fillButton = MouseBinding Tb2.keyMouseRight False
@@ -180,10 +182,6 @@ namedKeys =
   , ("PageUp", Tb2.keyPgUp)
   , ("PageDown", Tb2.keyPgDn)
   , ("Ctrl+S", Tb2.keyCtrlS)
-  , ("Ctrl+ArrowUp", Tb2.keyCtrlArrowUp)
-  , ("Ctrl+ArrowDown", Tb2.keyCtrlArrowDown)
-  , ("Ctrl+ArrowLeft", Tb2.keyCtrlArrowLeft)
-  , ("Ctrl+ArrowRight", Tb2.keyCtrlArrowRight)
   ]
 
 {- | Maps a config setting name to the 'KeyMap' field it updates (full
@@ -237,11 +235,13 @@ parseBase s = case lookup s namedKeys of
     [c] -> Just (Char c)
     _ -> Nothing
 
--- | A base key name, or @Alt+@ followed by one.
+-- | A base key name, or @Alt+@ / @Ctrl+@ followed by one.
 parseBinding :: String -> Maybe Binding
 parseBinding s = case stripPrefix "Alt+" s of
   Just rest -> WithAlt <$> parseBase rest
-  Nothing -> Plain <$> parseBase s
+  Nothing -> case stripPrefix "Ctrl+" s of
+    Just rest -> WithCtrl <$> parseBase rest
+    Nothing -> Plain <$> parseBase s
 
 -- | A named key from 'namedKeys', or @Ctrl+@ followed by one.
 parseMouseBinding :: String -> Maybe MouseBinding
