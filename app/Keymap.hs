@@ -77,6 +77,10 @@ matchesMouse (MouseBinding key ctrl) evt =
 
 data KeyMap = KeyMap
   { moveUp, moveDown, moveLeft, moveRight :: Binding
+  , tabKey :: Binding
+  {- ^ Tab moves right (next cell); Shift+Tab moves left (previous cell).
+  Shift+Tab is not itself configurable - see the Shift+Arrow note.
+  -}
   , scrollUp, scrollDown :: MouseBinding
   , zoomInKey, zoomOutKey, zoomResetKey :: Binding
   {- ^ Keyboard equivalents of the scroll-wheel zoom: in, out, and reset
@@ -139,6 +143,7 @@ defaultKeyMap =
     , moveDown = Plain (Key Tb2.keyArrowDown)
     , moveLeft = Plain (Key Tb2.keyArrowLeft)
     , moveRight = Plain (Key Tb2.keyArrowRight)
+    , tabKey = Plain (Key Tb2.keyCtrlTab)
     , scrollUp = MouseBinding Tb2.keyMouseWheelUp False
     , scrollDown = MouseBinding Tb2.keyMouseWheelDown False
     , zoomInKey = Plain (Char '=')
@@ -203,6 +208,7 @@ bindingSetters =
   , ("moveDown", \k m -> m{moveDown = k})
   , ("moveLeft", \k m -> m{moveLeft = k})
   , ("moveRight", \k m -> m{moveRight = k})
+  , ("tabKey", \k m -> m{tabKey = k})
   , ("zoomInKey", \k m -> m{zoomInKey = k})
   , ("zoomOutKey", \k m -> m{zoomOutKey = k})
   , ("zoomResetKey", \k m -> m{zoomResetKey = k})
@@ -328,6 +334,7 @@ defaultConfigText =
     , "moveDown = ArrowDown"
     , "moveLeft = ArrowLeft"
     , "moveRight = ArrowRight"
+    , "tabKey = Tab"
     , "scrollUp = WheelUp"
     , "scrollDown = WheelDown"
     , "zoomInKey = ="

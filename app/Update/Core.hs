@@ -136,6 +136,12 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     | matches (moveDown keymap) evt = nudge (0, 1)
     | matches (moveLeft keymap) evt = nudge (-1, 0)
     | matches (moveRight keymap) evt = nudge (1, 0)
+    -- | Tab moves right, Shift+Tab moves left - the traditional
+    -- "next/previous cell" gesture. Shift+Tab is hard-coded (like
+    -- Shift+Arrow above) since termbox2 only reports Shift reliably
+    -- on physical keys, not remapped bindings.
+    | isShiftKey evt Tb2.keyCtrlTab = nudge (-1, 0)
+    | matches (tabKey keymap) evt = nudge (1, 0)
     | matchesMouse (scrollUp keymap) evt = zoomBy 1
     | matchesMouse (scrollDown keymap) evt = zoomBy (-1)
     -- \| Keyboard zoom: the same three steps the scroll wheel gives,
