@@ -39,7 +39,7 @@ import Update.Buffer (clampCursor, deleteAt, deleteBefore, insertAt, isValid)
 import Update.Chart (toggleChart)
 import Update.Events (dragging, isKey, isMouse, isShiftKey, printableChar)
 import Update.Fill (commitFill, fillDragTo)
-import Update.Navigation (moveTo, nudge, nudgeSelecting, panBy, zoomBy)
+import Update.Navigation (moveTo, nudge, nudgeSelecting, panBy, panPage, zoomBy)
 import Update.Subscriptions (
   cancelSubscription,
   drainLiveUpdates,
@@ -143,6 +143,10 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     | matches (zoomOutKey keymap) evt = zoomBy (-1)
     | matches (zoomResetKey keymap) evt =
         UI.modify (\st -> st{cellWidth = initialCellWidth})
+    -- \| Keyboard pan: shifts the viewport by one visible page, the
+    -- same gesture as middle-click-drag but without a mouse.
+    | matches (pageUp keymap) evt = panPage (0, -1)
+    | matches (pageDown keymap) evt = panPage (0, 1)
     -- \| A fresh press of the select button: also checks for a double-click
     -- within 'doubleClickWindow', opening the cell for editing instead of
     -- just selecting it.

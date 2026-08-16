@@ -61,6 +61,7 @@ tests =
     , deleteAtTests
     , clampCursorTests
     , zoomKeyTests
+    , pageKeyTests
     ]
 
 isKeyIsMouseTests :: TestTree
@@ -167,5 +168,23 @@ zoomKeyTests =
           @?= False
     , testCase "Ctrl+= does not match a mouse event" $
         matches (Plain (Key Tb2.keyCtrlEqual)) (mouseEvent Tb2.keyMouseLeft False)
+          @?= False
+    ]
+
+pageKeyTests :: TestTree
+pageKeyTests =
+  testGroup
+    "page keys"
+    [ testCase "PageUp matches pageUp binding" $
+        matches (Plain (Key Tb2.keyPgUp)) (keyEvent Tb2.keyPgUp)
+          @?= True
+    , testCase "PageDown matches pageDown binding" $
+        matches (Plain (Key Tb2.keyPgDn)) (keyEvent Tb2.keyPgDn)
+          @?= True
+    , testCase "PageUp does not match PageDown" $
+        matches (Plain (Key Tb2.keyPgUp)) (keyEvent Tb2.keyPgDn)
+          @?= False
+    , testCase "PageUp does not match a mouse event" $
+        matches (Plain (Key Tb2.keyPgUp)) (mouseEvent Tb2.keyMouseLeft False)
           @?= False
     ]

@@ -80,6 +80,10 @@ data KeyMap = KeyMap
   {- ^ Keyboard equivalents of the scroll-wheel zoom: in, out, and reset
   to the initial (unzoomed) cell width.
   -}
+  , pageUp, pageDown :: Binding
+  {- ^ Pan the viewport up or down by one visible page, the keyboard
+  equivalent of middle-click-drag panning.
+  -}
   , selectButton :: MouseBinding
   -- ^ Which mouse gesture selects\/drags a cell.
   , panButton :: MouseBinding
@@ -128,6 +132,8 @@ defaultKeyMap =
     , zoomInKey = Plain (Key Tb2.keyCtrlEqual)
     , zoomOutKey = Plain (Key Tb2.keyCtrlMinus)
     , zoomResetKey = Plain (Key Tb2.keyCtrl0)
+    , pageUp = Plain (Key Tb2.keyPgUp)
+    , pageDown = Plain (Key Tb2.keyPgDn)
     , selectButton = MouseBinding Tb2.keyMouseLeft False
     , panButton = MouseBinding Tb2.keyMouseMiddle False
     , fillButton = MouseBinding Tb2.keyMouseRight False
@@ -183,6 +189,8 @@ bindingSetters =
   , ("zoomInKey", \k m -> m{zoomInKey = k})
   , ("zoomOutKey", \k m -> m{zoomOutKey = k})
   , ("zoomResetKey", \k m -> m{zoomResetKey = k})
+  , ("pageUp", \k m -> m{pageUp = k})
+  , ("pageDown", \k m -> m{pageDown = k})
   , ("confirm", \k m -> m{confirm = k})
   , ("cancel", \k m -> m{cancel = k})
   , ("clearCell", \k m -> m{clearCell = k})
@@ -300,6 +308,8 @@ defaultConfigText =
     , "zoomInKey = Ctrl+="
     , "zoomOutKey = Ctrl+-"
     , "zoomResetKey = Ctrl+0"
+    , "pageUp = PageUp"
+    , "pageDown = PageDown"
     , "selectButton = MouseLeft"
     , "panButton = MouseMiddle"
     , "fillButton = MouseRight"

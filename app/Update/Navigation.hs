@@ -10,6 +10,7 @@ module Update.Navigation (
   nudgeSelecting,
   zoomBy,
   panBy,
+  panPage,
 ) where
 
 import Control.Monad (when)
@@ -84,6 +85,28 @@ zoomBy delta = do
       { cellWidth = newWidth
       , viewportOrigin =
           clampOrigin newWidth (cursor st) dims (viewportOrigin st)
+      }
+
+{- | Shifts the viewport by one visible "page" in the given direction
+(@dx@, @dy@ in units of ±1), the keyboard equivalent of the
+middle-click-drag pan. The step is the number of visible rows/cols
+minus one, so consecutive presses tile the sheet without gaps or
+overlaps.
+-}
+panPage :: (Int, Int) -> UI.Action (UI.Store SheetState) IO ()
+panPage (dx, dy) = do
+  st <- UI.get
+  dims <- termSize
+  let cw = cellWidth st
+      rs = rowStride cw
+      visibleCols = max 1 (fst dims `div` cw)
+      visibleRows = max 1 (snd dims `div` rs)
+      stepX = (visibleCols - 1) * dx
+      stepY = (visibleRows - 1) * dy
+      (ox, oy) = viewportOrigin st
+  UI.put
+    st
+      { viewportOrigin = (ox + stepX, oy + stepY)
       }
 
 {- | Both the first press and every drag motion of the pan gesture route
