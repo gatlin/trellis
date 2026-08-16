@@ -39,7 +39,7 @@ import qualified Trellis.UI as UI
 import Update.Buffer (clampCursor, deleteAt, deleteBefore, insertAt, isValid)
 import Update.Chart (toggleChart)
 import Update.Events (dragging, isKey, isMouse, isShiftKey, printableChar)
-import Update.Fill (commitFill, fillDragTo)
+import Update.Fill (commitFill, fillDragTo, keyboardFill)
 import Update.Navigation (moveTo, nudge, nudgeSelecting, panBy, panPage, zoomBy)
 import Update.Subscriptions (
   cancelSubscription,
@@ -166,6 +166,10 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     -- \| Same self-distinguishing shape as 'panBy', for the fill gesture.
     | matchesMouse (fillButton keymap) evt =
         fillDragTo (fromIntegral (Tb2._x evt)) (fromIntegral (Tb2._y evt))
+    -- \| Keyboard fill: replicate the current selection's source across
+    -- the selection, the keyboard equivalent of right-click-drag.
+    | matches (fillKey keymap) evt = keyboardFill
+    | matches (fillKeyAlt keymap) evt = keyboardFill
     -- \| Release isn't bound to anything, but still commits any
     -- in-progress fill and clears both drag anchors. [^3]
     | isMouse evt Tb2.keyMouseRelease = do

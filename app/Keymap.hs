@@ -98,6 +98,10 @@ data KeyMap = KeyMap
   {- ^ Which mouse gesture, held and dragged, fills the dragged range with
   the source cell's formula, references adjusted to match.
   -}
+  , fillKey, fillKeyAlt :: Binding
+  {- ^ Keyboard equivalents of the fill gesture: replicate the current
+  selection's source across the selection. Two keys for convenience.
+  -}
   , confirm :: Binding
   -- ^ Starts an edit when navigating; commits it when editing.
   , cancel :: Binding
@@ -147,6 +151,8 @@ defaultKeyMap =
     , selectButton = MouseBinding Tb2.keyMouseLeft False
     , panButton = MouseBinding Tb2.keyMouseMiddle False
     , fillButton = MouseBinding Tb2.keyMouseRight False
+    , fillKey = WithCtrl (Char 'd')
+    , fillKeyAlt = WithCtrl (Char 'r')
     , confirm = Plain (Key Tb2.keyCtrlEnter)
     , cancel = Plain (Key Tb2.keyCtrlEsc)
     , clearCell = Plain (Key Tb2.keyDelete)
@@ -223,6 +229,8 @@ mouseKeySetters =
   , ("selectButton", \k m -> m{selectButton = k})
   , ("panButton", \k m -> m{panButton = k})
   , ("fillButton", \k m -> m{fillButton = k})
+  , ("fillKey", \k m -> m{fillKey = k})
+  , ("fillKeyAlt", \k m -> m{fillKeyAlt = k})
   ]
 
 {- | A name from 'namedKeys', or - since letters have no named key - a
@@ -329,6 +337,8 @@ defaultConfigText =
     , "selectButton = MouseLeft"
     , "panButton = MouseMiddle"
     , "fillButton = MouseRight"
+    , "fillKey = Ctrl+d"
+    , "fillKeyAlt = Ctrl+r"
     , "confirm = Enter"
     , "cancel = Escape"
     , "clearCell = Delete"

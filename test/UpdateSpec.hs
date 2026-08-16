@@ -62,6 +62,7 @@ tests =
     , clampCursorTests
     , zoomKeyTests
     , pageKeyTests
+    , fillKeyTests
     ]
 
 isKeyIsMouseTests :: TestTree
@@ -170,6 +171,32 @@ zoomKeyTests =
         matches (Plain (Char '=')) (mouseEvent Tb2.keyMouseLeft False)
           @?= False
     ]
+
+fillKeyTests :: TestTree
+fillKeyTests =
+  testGroup
+    "fill keys"
+    [ testCase "Ctrl+d matches fillKey binding" $
+        matches (WithCtrl (Char 'd')) (ctrlCharEvent 'd')
+          @?= True
+    , testCase "Ctrl+r matches fillKeyAlt binding" $
+        matches (WithCtrl (Char 'r')) (ctrlCharEvent 'r')
+          @?= True
+    , testCase "Ctrl+d does not match a plain 'd' (no Ctrl)" $
+        matches (WithCtrl (Char 'd')) (charEvent 'd')
+          @?= False
+    , testCase "Ctrl+d does not match an unrelated key" $
+        matches (WithCtrl (Char 'd')) (keyEvent Tb2.keyArrowUp)
+          @?= False
+    , testCase "Ctrl+d does not match a mouse event" $
+        matches (WithCtrl (Char 'd')) (mouseEvent Tb2.keyMouseLeft False)
+          @?= False
+    ]
+
+-- | A Ctrl-held character event.
+ctrlCharEvent :: Char -> Tb2.Tb2Event
+ctrlCharEvent c =
+  (charEvent c){Tb2._mod = Tb2.modCtrl}
 
 pageKeyTests :: TestTree
 pageKeyTests =

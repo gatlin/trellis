@@ -7,6 +7,7 @@ references adjusted rather than copied verbatim.
 module Update.Fill (
   fillDragTo,
   commitFill,
+  keyboardFill,
 ) where
 
 import Control.Monad (forM_)
@@ -105,6 +106,21 @@ commitColFill x0 (y0, y1) xT
         forM_ (Map.lookup (x0, y) (cells st)) $ \srcExpr ->
           forM_ [x | x <- [min x0 xT .. max x0 xT], x /= x0] $ \x ->
             fillCell (x0, y) srcExpr (x, y)
+
+{- | Keyboard fill: reads the current selection, classifies it the same
+way a mouse-drag would, and commits immediately. A no-op if there is no
+selection (a single focused cell has nothing to replicate across).
+-}
+keyboardFill :: UI.Action (UI.Store SheetState) IO ()
+keyboardFill = do
+  st <- UI.get
+  case selection st of
+    Nothing -> return ()
+    Just (anchor, endpoint) ->
+      case classifySelection anchor (Just (anchor, endpoint)) of
+        FillCell a -> commitCellFill a endpoint
+        FillRow y0 (x0, x1) -> commitRowFill y0 (x0, x1) (snd endpoint)
+        FillCol x0 (y0, y1) -> commitColFill x0 (y0, y1) (fst endpoint)
 
 {- | Writes @srcExpr@ into @pos@, adjusted by @pos@'s offset from
 @source@, cancelling any subscription @pos@ already had - same as
