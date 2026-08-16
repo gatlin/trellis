@@ -160,7 +160,7 @@ defaultKeyMap =
     , fillButton = MouseBinding Tb2.keyMouseRight False
     , fillKey = WithCtrl (Char 'd')
     , fillKeyAlt = WithCtrl (Char 'r')
-    , confirm = Plain (Key Tb2.keyCtrlM)
+    , confirm = Plain (Key Tb2.keyCtrlEnter)
     , cancel = Plain (Key Tb2.keyCtrlEsc)
     , clearCell = Plain (Key Tb2.keyDelete)
     , barChartKey = Plain (Char 'b')
@@ -186,7 +186,7 @@ namedKeys =
   , ("MouseLeft", Tb2.keyMouseLeft)
   , ("MouseRight", Tb2.keyMouseRight)
   , ("MouseMiddle", Tb2.keyMouseMiddle)
-  , ("Enter", Tb2.keyCtrlM)
+  , ("Enter", Tb2.keyCtrlEnter)
   , ("Escape", Tb2.keyCtrlEsc)
   , ("Delete", Tb2.keyDelete)
   , ("Tab", Tb2.keyCtrlTab)
