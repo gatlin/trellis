@@ -299,7 +299,8 @@ nudgeSelectingAnchorTests =
         let cursor = (6, 5)
             sel = Just ((5, 5), (6, 5))
             newCursor = (7, 5)
-         in (Nothing, newCursor) @?= (Nothing, (7, 5))
+         in ((Nothing, newCursor) :: (Maybe (Int, Int), (Int, Int)))
+           @?= (Nothing, (7, 5))
     , testCase "after plain nudge (selection cleared), next nudgeSelecting starts fresh" $
         let cursor = (7, 5)
             sel = Nothing

@@ -1,5 +1,6 @@
 module UpdateNavigationSpec (tests) where
 
+import Control.Comonad.Store (seek)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
 import SheetState (SheetState (..), initialState)
@@ -8,7 +9,11 @@ import Update.Navigation (nudge, nudgeSelecting)
 
 -- | Run a UI.Action against an initial state, returning the final state.
 runAction :: UI.Action (UI.Store SheetState) IO () -> SheetState -> IO SheetState
-runAction act st = UI.move (const return) act (UI.store st :: UI.Store SheetState SheetState)
+runAction act st =
+  UI.move
+    (\() st' -> return st')
+    act
+    (seek st (UI.store id :: UI.Store SheetState SheetState))
 
 tests :: TestTree
 tests =
