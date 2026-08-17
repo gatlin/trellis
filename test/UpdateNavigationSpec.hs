@@ -8,7 +8,7 @@ import Update.Navigation (nudge, nudgeSelecting)
 
 -- | Run a UI.Action against an initial state, returning the final state.
 runAction :: UI.Action (UI.Store SheetState) IO () -> SheetState -> IO SheetState
-runAction act st = UI.move (const return) act (UI.store st)
+runAction act st = UI.move (const return) act (UI.store st :: UI.Store SheetState SheetState)
 
 tests :: TestTree
 tests =
