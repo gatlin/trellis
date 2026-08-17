@@ -16,6 +16,7 @@ import Update (
   isValid,
   printableChar,
  )
+import Update.Events (isShiftKey)
 
 -- | A named-key event, e.g. an arrow key: '_ch' is unused, '_key' is set.
 keyEvent :: Tb2.Tb2Key -> Tb2.Tb2Event
@@ -49,6 +50,10 @@ mouseEvent k isDragging =
     , Tb2._y = 0
     }
 
+-- | A named-key event with the Shift modifier held.
+shiftKeyEvent :: Tb2.Tb2Key -> Tb2.Tb2Event
+shiftKeyEvent k = (keyEvent k){Tb2._mod = Tb2.modShift}
+
 tests :: TestTree
 tests =
   testGroup
@@ -64,6 +69,7 @@ tests =
     , zoomKeyTests
     , pageKeyTests
     , fillKeyTests
+    , shiftKeyTests
     , clearCellKeyTests
     , editKeyTests
     , gutterHeaderClickTests
@@ -230,6 +236,22 @@ editKeyTests =
     , testCase "F2 does not match a mouse event" $
         matches (Plain (Key Tb2.keyF2)) (mouseEvent Tb2.keyMouseLeft False)
           @?= False
+    ]
+
+shiftKeyTests :: TestTree
+shiftKeyTests =
+  testGroup
+    "isShiftKey"
+    [ testCase "Shift+ArrowUp matches ArrowUp" $
+        isShiftKey (shiftKeyEvent Tb2.keyArrowUp) Tb2.keyArrowUp @?= True
+    , testCase "ArrowUp without Shift does not match" $
+        isShiftKey (keyEvent Tb2.keyArrowUp) Tb2.keyArrowUp @?= False
+    , testCase "Shift+ArrowUp does not match ArrowDown" $
+        isShiftKey (shiftKeyEvent Tb2.keyArrowUp) Tb2.keyArrowDown @?= False
+    , testCase "a mouse event never matches" $
+        isShiftKey (mouseEvent Tb2.keyMouseLeft False) Tb2.keyArrowUp @?= False
+    , testCase "Shift+ArrowDown does not match ArrowUp" $
+        isShiftKey (shiftKeyEvent Tb2.keyArrowDown) Tb2.keyArrowUp @?= False
     ]
 
 gutterHeaderClickTests :: TestTree
