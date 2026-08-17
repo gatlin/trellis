@@ -182,7 +182,12 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
         commitFill
         UI.modify (\st -> st{panAnchor = Nothing, fillDrag = Nothing})
     | matches (confirm keymap) evt = beginEditHere
-    | printableChar evt == Just '\r' = beginEditHere
+    | Tb2._type evt == Tb2.eventKey
+        && ( Tb2._key evt == Tb2.keyCtrlEnter
+             || Tb2._ch evt == 13
+             || Tb2._ch evt == 10
+           ) =
+        beginEditHere
     | matches (editKey keymap) evt = beginEditHere
     | matches (clearCell keymap) evt = clearFocusedCell
     | matches (barChartKey keymap) evt = toggleChart BarChart
