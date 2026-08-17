@@ -1,6 +1,6 @@
 module UpdateNavigationSpec (tests) where
 
-import Control.Comonad.Store (Store (..))
+import qualified Control.Comonad.Store as CS
 import SheetState (SheetState (..), initialState)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
@@ -14,7 +14,7 @@ runAction act st =
   UI.move
     (\() st' -> return st')
     act
-    (Store (\s -> const (return s)) st)
+    (CS.Store id st)
 
 tests :: TestTree
 tests =
