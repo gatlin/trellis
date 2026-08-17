@@ -284,34 +284,32 @@ nudgeSelectingAnchorTests =
   testGroup
     "nudgeSelecting anchor logic"
     [ testCase "no selection: anchor is cursor, selection spans cursor to new position" $
-        let cursor = (5, 5)
-            sel = Nothing
+        let cursor = (5, 5) :: (Int, Int)
+            sel = Nothing :: Maybe ((Int, Int), (Int, Int))
             anchor = resolveAnchor cursor sel
-            newCursor = (6, 5)
+            newCursor = (6, 5) :: (Int, Int)
          in (anchor, newCursor) @?= ((5, 5), (6, 5))
     , testCase "endpoint matches cursor: anchor preserved from selection start" $
-        let cursor = (6, 5)
-            sel = Just ((5, 5), (6, 5))
+        let cursor = (6, 5) :: (Int, Int)
+            sel = Just ((5, 5), (6, 5)) :: Maybe ((Int, Int), (Int, Int))
             anchor = resolveAnchor cursor sel
-            newCursor = (7, 5)
+            newCursor = (7, 5) :: (Int, Int)
          in (anchor, newCursor) @?= ((5, 5), (7, 5))
     , testCase "plain nudge clears selection regardless of prior state" $
-        let cursor = (6, 5)
-            sel = Just ((5, 5), (6, 5))
-            newCursor = (7, 5)
+        let newCursor = (7, 5) :: (Int, Int)
          in ((Nothing, newCursor) :: (Maybe (Int, Int), (Int, Int)))
            @?= (Nothing, (7, 5))
     , testCase "after plain nudge (selection cleared), next nudgeSelecting starts fresh" $
-        let cursor = (7, 5)
-            sel = Nothing
+        let cursor = (7, 5) :: (Int, Int)
+            sel = Nothing :: Maybe ((Int, Int), (Int, Int))
             anchor = resolveAnchor cursor sel
-            newCursor = (8, 5)
+            newCursor = (8, 5) :: (Int, Int)
          in (anchor, newCursor) @?= ((7, 5), (8, 5))
     , testCase "endpoint does NOT match cursor: fresh anchor at cursor" $
-        let cursor = (7, 5)
-            sel = Just ((5, 5), (6, 5))
+        let cursor = (7, 5) :: (Int, Int)
+            sel = Just ((5, 5), (6, 5)) :: Maybe ((Int, Int), (Int, Int))
             anchor = resolveAnchor cursor sel
-            newCursor = (8, 5)
+            newCursor = (8, 5) :: (Int, Int)
          in (anchor, newCursor) @?= ((7, 5), (8, 5))
     ]
 
