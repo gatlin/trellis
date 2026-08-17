@@ -73,6 +73,7 @@ tests =
     , clearCellKeyTests
     , editKeyTests
     , gutterHeaderClickTests
+    , nudgeSelectingAnchorTests
     ]
 
 isKeyIsMouseTests :: TestTree
@@ -266,6 +267,51 @@ gutterHeaderClickTests =
         cellAt 8 (0, 0) 10 1 @?= Nothing
     , testCase "cellAt returns Just for a valid cell position" $
         cellAt 8 (0, 0) 10 2 @?= Just (0, 0)
+    ]
+
+{- | Mirrors the anchor-resolution logic in 'Update.Navigation.nudgeSelecting':
+if the selection's endpoint matches the cursor, the anchor is the selection's
+start (continuation of an in-progress Shift+Arrow run); otherwise the cursor
+itself becomes the fresh anchor.
+-}
+resolveAnchor :: (Int, Int) -> Maybe ((Int, Int), (Int, Int)) -> (Int, Int)
+resolveAnchor cursor sel = case sel of
+  Just (a, e) | e == cursor -> a
+  _ -> cursor
+
+nudgeSelectingAnchorTests :: TestTree
+nudgeSelectingAnchorTests =
+  testGroup
+    "nudgeSelecting anchor logic"
+    [ testCase "no selection: anchor is cursor, selection spans cursor to new position" $
+        let cursor = (5, 5)
+            sel = Nothing
+            anchor = resolveAnchor cursor sel
+            newCursor = (6, 5)
+         in (anchor, newCursor) @?= ((5, 5), (6, 5))
+    , testCase "endpoint matches cursor: anchor preserved from selection start" $
+        let cursor = (6, 5)
+            sel = Just ((5, 5), (6, 5))
+            anchor = resolveAnchor cursor sel
+            newCursor = (7, 5)
+         in (anchor, newCursor) @?= ((5, 5), (7, 5))
+    , testCase "plain nudge clears selection regardless of prior state" $
+        let cursor = (6, 5)
+            sel = Just ((5, 5), (6, 5))
+            newCursor = (7, 5)
+         in (Nothing, newCursor) @?= (Nothing, (7, 5))
+    , testCase "after plain nudge (selection cleared), next nudgeSelecting starts fresh" $
+        let cursor = (7, 5)
+            sel = Nothing
+            anchor = resolveAnchor cursor sel
+            newCursor = (8, 5)
+         in (anchor, newCursor) @?= ((7, 5), (8, 5))
+    , testCase "endpoint does NOT match cursor: fresh anchor at cursor" $
+        let cursor = (7, 5)
+            sel = Just ((5, 5), (6, 5))
+            anchor = resolveAnchor cursor sel
+            newCursor = (8, 5)
+         in (anchor, newCursor) @?= ((7, 5), (8, 5))
     ]
 
 pageKeyTests :: TestTree
