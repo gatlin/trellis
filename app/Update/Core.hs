@@ -205,6 +205,7 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
   -- anything, so a stray arrow key can't quietly abandon an edit.
   editing est
     | matches (confirm keymap) evt
+        || matches (editKey keymap) evt
         || ( Tb2._type evt == Tb2.eventKey
              && ( Tb2._ch evt == 13 || Tb2._ch evt == 10 )
            ) =
