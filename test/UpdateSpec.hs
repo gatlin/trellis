@@ -4,6 +4,7 @@ import qualified Termbox2 as Tb2
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
 import Keymap (BaseKey (..), Binding (..), matches)
+import SheetState.Geometry (cellAt)
 import Update (
   clampCursor,
   deleteAt,
@@ -65,6 +66,7 @@ tests =
     , fillKeyTests
     , clearCellKeyTests
     , editKeyTests
+    , gutterHeaderClickTests
     ]
 
 isKeyIsMouseTests :: TestTree
@@ -228,6 +230,20 @@ editKeyTests =
     , testCase "F2 does not match a mouse event" $
         matches (Plain (Key Tb2.keyF2)) (mouseEvent Tb2.keyMouseLeft False)
           @?= False
+    ]
+
+gutterHeaderClickTests :: TestTree
+gutterHeaderClickTests =
+  testGroup
+    "gutter/header click deselects"
+    [ testCase "cellAt returns Nothing for a gutter position" $
+        cellAt 8 (0, 0) 2 5 @?= Nothing
+    , testCase "cellAt returns Nothing for a header position" $
+        cellAt 8 (0, 0) 10 0 @?= Nothing
+    , testCase "cellAt returns Nothing for a ruled line" $
+        cellAt 8 (0, 0) 10 1 @?= Nothing
+    , testCase "cellAt returns Just for a valid cell position" $
+        cellAt 8 (0, 0) 10 2 @?= Just (0, 0)
     ]
 
 pageKeyTests :: TestTree

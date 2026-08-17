@@ -317,7 +317,7 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
       (viewportOrigin st)
       (fromIntegral (Tb2._x evt))
       (fromIntegral (Tb2._y evt)) of
-      Nothing -> return ()
+      Nothing -> UI.modify (\st -> st{selection = Nothing, chart = Nothing})
       Just target -> do
         now <- UI.liftIO getCurrentTime
         let isDouble = case lastClick st of
