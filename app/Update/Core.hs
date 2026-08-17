@@ -15,7 +15,6 @@ module Update.Core (
 import Control.Concurrent.STM.MonadIO (TVar)
 import Control.Monad (forM_, when)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (isJust)
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Formula (Expr)
 import Keymap (KeyMap (..), matches, matchesMouse)
@@ -36,7 +35,7 @@ import qualified Termbox2 as Tb2
 import Trellis.CPS (CPS, lift, reset, shift)
 import qualified Trellis.Orc as Orc
 import qualified Trellis.UI as UI
-import Update.Buffer (clampCursor, deleteAt, deleteBefore, insertAt, isValid)
+import Update.Buffer (clampCursor, deleteAt, deleteBefore, insertAt)
 import Update.Chart (toggleChart)
 import Update.Events (dragging, isKey, isMouse, isShiftKey, printableChar)
 import Update.Fill (commitFill, fillDragTo, keyboardFill)
@@ -209,12 +208,7 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
         || ( Tb2._type evt == Tb2.eventKey
              && ( Tb2._ch evt == 13 || Tb2._ch evt == 10 )
            ) =
-        when
-          ( null (editorBuffer est)
-              || isValid (editorBuffer est)
-              || isJust (parseLiveSpec (editorBuffer est))
-          )
-          $ closeEditor est (Just (editorBuffer est))
+        closeEditor est (Just (editorBuffer est))
     | matches (cancel keymap) evt = closeEditor est Nothing
     -- \| Cursor movement is always the physical arrow keys\/Home\/End,
     -- never routed through the keymap - unlike sheet navigation, so it
