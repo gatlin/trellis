@@ -121,13 +121,6 @@ data KeyMap = KeyMap
   -- ^ Writes the sheet back to the file it was loaded from, if any.
   , editKey :: Binding
   -- ^ Opens the formula editor for the focused cell (same as 'confirm').
-  , selectUp, selectDown, selectLeft, selectRight :: Binding
-  {- ^ Extend a selection from the keyboard - alongside Shift+Arrow, which
-  isn't itself configurable (see "Update.Events.isShiftKey"). Some
-  terminals\/multiplexers\/SSH hops don't relay Shift held on an arrow key
-  but do relay Alt, so this is a second, independent path to the same
-  gesture, not a replacement.
-  -}
   }
 
 {- | Arrows navigate, the wheel zooms, left-click selects\/drags,
@@ -168,10 +161,6 @@ defaultKeyMap =
     , heatmapKey = Plain (Char 'h')
     , saveKey = Plain (Key Tb2.keyCtrlS)
     , editKey = Plain (Key Tb2.keyF2)
-    , selectUp = WithAlt (Key Tb2.keyArrowUp)
-    , selectDown = WithAlt (Key Tb2.keyArrowDown)
-    , selectLeft = WithAlt (Key Tb2.keyArrowLeft)
-    , selectRight = WithAlt (Key Tb2.keyArrowRight)
     }
 
 -- | The named keys a config file can refer to, beyond a bare character.
@@ -228,10 +217,6 @@ bindingSetters =
   , ("heatmapKey", \k m -> m{heatmapKey = k})
   , ("saveKey", \k m -> m{saveKey = k})
   , ("editKey", \k m -> m{editKey = k})
-  , ("selectUp", \k m -> m{selectUp = k})
-  , ("selectDown", \k m -> m{selectDown = k})
-  , ("selectLeft", \k m -> m{selectLeft = k})
-  , ("selectRight", \k m -> m{selectRight = k})
   ]
 
 -- | Same, for the mouse-only fields that take a 'MouseBinding'.
@@ -324,11 +309,6 @@ defaultConfigText =
     , "#"
     , "# saveKey writes the sheet back to the file it was loaded from, if"
     , "# any - a no-op if Trellis wasn't started with a file."
-    , "#"
-    , "# selectUp/selectDown/selectLeft/selectRight extend a selection from"
-    , "# the keyboard, same as Shift+Arrow (which isn't itself configurable)"
-    , "# - a second path to the same gesture for a terminal that won't"
-    , "# relay Shift held on an arrow key but will relay Alt."
     , ""
     , "moveUp = ArrowUp"
     , "moveDown = ArrowDown"
@@ -359,10 +339,6 @@ defaultConfigText =
     , "heatmapKey = h"
     , "saveKey = Ctrl+S"
     , "editKey = F2"
-    , "selectUp = Alt+ArrowUp"
-    , "selectDown = Alt+ArrowDown"
-    , "selectLeft = Alt+ArrowLeft"
-    , "selectRight = Alt+ArrowRight"
     ]
 
 {- | Reads the keybindings config file (creating it from

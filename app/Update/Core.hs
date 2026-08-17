@@ -125,12 +125,6 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     | isShiftKey evt Tb2.keyArrowDown = nudgeSelecting (0, 1)
     | isShiftKey evt Tb2.keyArrowLeft = nudgeSelecting (-1, 0)
     | isShiftKey evt Tb2.keyArrowRight = nudgeSelecting (1, 0)
-    -- \| A second, configurable path to the same gesture, for a terminal
-    -- that won't relay Shift held on an arrow key - see 'Keymap.selectUp'.
-    | matches (selectUp keymap) evt = nudgeSelecting (0, -1)
-    | matches (selectDown keymap) evt = nudgeSelecting (0, 1)
-    | matches (selectLeft keymap) evt = nudgeSelecting (-1, 0)
-    | matches (selectRight keymap) evt = nudgeSelecting (1, 0)
     | matches (moveUp keymap) evt = nudge (0, -1)
     | matches (moveDown keymap) evt = nudge (0, 1)
     | matches (moveLeft keymap) evt = nudge (-1, 0)
