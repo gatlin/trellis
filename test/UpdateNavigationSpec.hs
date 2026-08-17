@@ -14,7 +14,7 @@ runAction act st =
   UI.move
     (\() st' -> return st')
     act
-    (CS.Store id st)
+    (CS.StoreT id st)
 
 tests :: TestTree
 tests =
