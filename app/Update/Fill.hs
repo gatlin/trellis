@@ -31,7 +31,7 @@ drag just updates the endpoint, keeping that source fixed.
 fillDragTo :: Int -> Int -> UI.Action (UI.Store SheetState) IO ()
 fillDragTo screenX screenY = do
   st <- UI.get
-  case cellAt (cellWidth st) (viewportOrigin st) screenX screenY of
+  case cellAt (cellWidth st) (colScale st) (rowScale st) (viewportOrigin st) screenX screenY of
     Nothing -> return ()
     Just target -> case fillDrag st of
       Nothing ->

@@ -23,9 +23,16 @@ module SheetState (
   headerHeight,
   rowStride,
   statusBarHeight,
+  minScale,
+  maxScale,
+  colScaleStep,
+  clampScale,
+  colWidthAt,
+  rowHeightAt,
+  colBoundariesFrom,
+  rowBoundariesFrom,
   visibleCols,
   visibleRows,
-  colBoundaries,
   clampAxis,
   clampOrigin,
   cellAt,
@@ -48,13 +55,20 @@ import SheetState.Geometry (
   clampAxis,
   clampOrigin,
   clampRange,
-  colBoundaries,
+  clampScale,
+  colBoundariesFrom,
+  colScaleStep,
+  colWidthAt,
   defaultCellWidth,
   gutterWidth,
   headerHeight,
   initialCellWidth,
   maxCellWidth,
+  maxScale,
   minCellWidth,
+  minScale,
+  rowBoundariesFrom,
+  rowHeightAt,
   rowStride,
   statusBarHeight,
   visibleCols,
@@ -68,9 +82,20 @@ data SheetState = SheetState
   , viewportOrigin :: (Int, Int)
   , cellWidth :: Int
   {- ^ Zoom level, in effect: how many screen columns each sheet column
-  occupies. 'rowStride' is derived from this rather than tracked
-  separately, so zooming can't leave the two dimensions out of sync.
+  occupies by default. 'rowStride' is derived from this rather than
+  tracked separately, so zooming can't leave the two dimensions out of
+  sync. Individual columns\/rows may still deviate from it - see
+  'colScale'\/'rowScale'.
   -}
+  , colScale :: Map.Map Int Double
+  {- ^ Per-column width overrides: a ratio *relative to whatever
+  'cellWidth' currently is*, not a fixed pixel size - so a column resized
+  at one zoom level keeps the same relative size after zooming in or out
+  (see 'SheetState.Geometry.colWidthAt'). A column absent from this map
+  is exactly 'cellWidth' wide, same as before this existed.
+  -}
+  , rowScale :: Map.Map Int Double
+  -- ^ Like 'colScale', for row heights (relative to 'rowStride cellWidth').
   , cells :: Map.Map (Int, Int) Expr
   , editor :: Maybe EditorState
   {- ^ A formula editor open over the sheet, or 'Nothing' when just
@@ -159,6 +184,8 @@ initialState =
     (0, 0)
     (0, 0)
     initialCellWidth
+    Map.empty
+    Map.empty
     Map.empty
     Nothing
     Nothing

@@ -1,5 +1,6 @@
 module UpdateSpec (tests) where
 
+import qualified Data.Map.Strict as Map
 import qualified Termbox2 as Tb2
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
@@ -260,13 +261,13 @@ gutterHeaderClickTests =
   testGroup
     "gutter/header click deselects"
     [ testCase "cellAt returns Nothing for a gutter position" $
-        cellAt 8 (0, 0) 2 5 @?= Nothing
+        cellAt 8 Map.empty Map.empty (0, 0) 2 5 @?= Nothing
     , testCase "cellAt returns Nothing for a header position" $
-        cellAt 8 (0, 0) 10 0 @?= Nothing
+        cellAt 8 Map.empty Map.empty (0, 0) 10 0 @?= Nothing
     , testCase "cellAt returns Nothing for a ruled line" $
-        cellAt 8 (0, 0) 10 1 @?= Nothing
+        cellAt 8 Map.empty Map.empty (0, 0) 10 1 @?= Nothing
     , testCase "cellAt returns Just for a valid cell position" $
-        cellAt 8 (0, 0) 10 2 @?= Just (0, 0)
+        cellAt 8 Map.empty Map.empty (0, 0) 10 2 @?= Just (0, 0)
     ]
 
 {- | Mirrors the anchor-resolution logic in 'Update.Navigation.nudgeSelecting':

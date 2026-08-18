@@ -1,5 +1,6 @@
 module SheetStateSpec (tests) where
 
+import qualified Data.Map.Strict as Map
 import SheetState (
   Chart (..),
   ChartType (..),
@@ -32,23 +33,27 @@ tests =
     , cellsInSelectionTests
     ]
 
+{- | 'clampAxis' generalized from a fixed visible count to a per-item
+size function - @const 1@ items of size 1, a screen budget of @visible@,
+is exactly the old fixed-count behavior.
+-}
 clampAxisTests :: TestTree
 clampAxisTests =
   testGroup
     "clampAxis"
     [ testCase "cursor already in view leaves origin unchanged" $
-        clampAxis 5 2 0 @?= 0
+        clampAxis (const 1) 0 5 2 0 @?= 0
     , testCase "cursor past the right edge scrolls by the minimum amount" $
-        clampAxis 5 10 0 @?= 6
+        clampAxis (const 1) 0 5 10 0 @?= 6
     , testCase "cursor before the left edge snaps the origin to it" $
-        clampAxis 5 (-3) 0 @?= (-3)
+        clampAxis (const 1) 0 5 (-3) 0 @?= (-3)
     ]
 
 clampAxisInvariant :: TestTree
 clampAxisInvariant =
   testProperty "keeps the cursor within the visible window" $
     \(Positive visible) c o ->
-      let r = clampAxis visible c o
+      let r = clampAxis (const 1) 0 visible c o
        in c >= r && c <= r + visible - 1
 
 cellAtTests :: TestTree
@@ -56,15 +61,27 @@ cellAtTests =
   testGroup
     "cellAt"
     [ testCase "the header row has no cell" $
-        cellAt 8 (0, 0) 8 0 @?= Nothing
+        cellAt 8 Map.empty Map.empty (0, 0) 8 0 @?= Nothing
     , testCase "a ruled line has no cell" $
-        cellAt 8 (0, 0) 8 1 @?= Nothing
+        cellAt 8 Map.empty Map.empty (0, 0) 8 1 @?= Nothing
     , testCase "the row-number gutter has no cell" $
-        cellAt 8 (0, 0) 4 2 @?= Nothing
+        cellAt 8 Map.empty Map.empty (0, 0) 4 2 @?= Nothing
     , testCase "a real cell resolves at the viewport origin" $
-        cellAt 8 (0, 0) 8 2 @?= Just (0, 0)
+        cellAt 8 Map.empty Map.empty (0, 0) 8 2 @?= Just (0, 0)
     , testCase "the viewport origin offsets the resolved cell" $
-        cellAt 8 (3, 2) 8 2 @?= Just (3, 2)
+        cellAt 8 Map.empty Map.empty (3, 2) 8 2 @?= Just (3, 2)
+    , testCase "a widened column shifts where the next column starts" $
+        -- column 0 widened to 1.5x (12 screen cols instead of 8) - x=8
+        -- (which would have been column 1 at uniform width) still
+        -- resolves inside the widened column 0.
+        cellAt 8 (Map.singleton 0 1.5) Map.empty (0, 0) 8 2 @?= Just (0, 0)
+    , testCase "past a widened column resolves the next one correctly" $
+        cellAt 8 (Map.singleton 0 1.5) Map.empty (0, 0) 17 2 @?= Just (1, 0)
+    , testCase "a heightened row shifts where the next row starts" $
+        -- row 0 heightened to 2x (stride 4 instead of 2) - y=2 (which
+        -- would have been row 1's ruled line at uniform height) is still
+        -- inside row 0's own content/padding.
+        cellAt 8 Map.empty (Map.singleton 0 2) (0, 0) 8 2 @?= Just (0, 0)
     ]
 
 clampRangeTests :: TestTree

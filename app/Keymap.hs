@@ -98,6 +98,10 @@ data KeyMap = KeyMap
   {- ^ Pan the viewport by one visible page in the given direction,
   the keyboard equivalent of middle-click-drag panning.
   -}
+  , growColKey, shrinkColKey :: Binding
+  -- ^ Widen\/narrow the cursor's current column, relative to the current zoom.
+  , growRowKey, shrinkRowKey :: Binding
+  -- ^ Heighten\/shorten the cursor's current row, relative to the current zoom.
   , selectButton :: MouseBinding
   -- ^ Which mouse gesture selects\/drags a cell.
   , panButton :: MouseBinding
@@ -154,6 +158,10 @@ defaultKeyMap =
     , panDown = WithCtrl (Key Tb2.keyArrowDown)
     , panLeft = WithCtrl (Key Tb2.keyArrowLeft)
     , panRight = WithCtrl (Key Tb2.keyArrowRight)
+    , growColKey = Plain (Char ']')
+    , shrinkColKey = Plain (Char '[')
+    , growRowKey = Plain (Char '}')
+    , shrinkRowKey = Plain (Char '{')
     , selectButton = MouseBinding Tb2.keyMouseLeft False
     , panButton = MouseBinding Tb2.keyMouseMiddle False
     , fillButton = MouseBinding Tb2.keyMouseRight False
@@ -237,6 +245,10 @@ bindingSetters =
   , ("panDown", \k m -> m{panDown = k})
   , ("panLeft", \k m -> m{panLeft = k})
   , ("panRight", \k m -> m{panRight = k})
+  , ("growColKey", \k m -> m{growColKey = k})
+  , ("shrinkColKey", \k m -> m{shrinkColKey = k})
+  , ("growRowKey", \k m -> m{growRowKey = k})
+  , ("shrinkRowKey", \k m -> m{shrinkRowKey = k})
   , ("fillKey", \k m -> m{fillKey = k})
   , ("fillKeyAlt", \k m -> m{fillKeyAlt = k})
   , ("confirm", \k m -> m{confirm = k})
@@ -340,6 +352,11 @@ defaultConfigText =
     , "#"
     , "# saveKey writes the sheet back to the file it was loaded from, if"
     , "# any - a no-op if Trellis wasn't started with a file."
+    , "#"
+    , "# growColKey/shrinkColKey and growRowKey/shrinkRowKey resize the"
+    , "# cursor's current column/row, relative to the current zoom level -"
+    , "# so a resize made at one zoom keeps its relative size after zooming"
+    , "# in or out, rather than a fixed pixel size."
     , ""
     , "moveUp = ArrowUp"
     , "moveDown = ArrowDown"
@@ -357,6 +374,10 @@ defaultConfigText =
     , "panDown = Ctrl+ArrowDown"
     , "panLeft = Ctrl+ArrowLeft"
     , "panRight = Ctrl+ArrowRight"
+    , "growColKey = ]"
+    , "shrinkColKey = ["
+    , "growRowKey = }"
+    , "shrinkRowKey = {"
     , "selectButton = MouseLeft"
     , "panButton = MouseMiddle"
     , "fillButton = MouseRight"

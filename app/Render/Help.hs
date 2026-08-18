@@ -8,6 +8,7 @@ module Render.Help (renderHelp, helpContent, helpInnerHeight) where
 import Control.Monad (forM_)
 import Keymap (KeyMap (..), showBinding, showMouseBinding)
 import Render.Theme (gridFg, modalBorderBg, modalBorderFg, padTo)
+import SheetState.Geometry (clampRange)
 import qualified Trellis.UI as UI
 
 {- | How many 'helpContent' lines are visible at once, given the terminal
@@ -40,7 +41,7 @@ renderHelp scroll km = do
       yBot = y0 + boxH - 1
       footerY = yBot - 1
       maxOffset = max 0 (total - innerH)
-      offset = max 0 (min maxOffset scroll)
+      offset = clampRange 0 maxOffset scroll
       visible = take innerH (drop offset content)
       scrollable = maxOffset > 0
       footer
@@ -91,6 +92,12 @@ helpContent km =
   , (showBinding (zoomInKey km), "Zoom in (key)")
   , (showBinding (zoomOutKey km), "Zoom out (key)")
   , (showBinding (zoomResetKey km), "Zoom reset")
+  , ("", "")
+  , ("Resize", "")
+  , (showBinding (growColKey km), "Widen current column")
+  , (showBinding (shrinkColKey km), "Narrow current column")
+  , (showBinding (growRowKey km), "Heighten current row")
+  , (showBinding (shrinkRowKey km), "Shorten current row")
   , ("", "")
   , ("Pan", "")
   , (showBinding (pageUp km), "Page up")

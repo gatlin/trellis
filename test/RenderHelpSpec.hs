@@ -1,7 +1,8 @@
 {- |
 Module: RenderHelpSpec
-Description: Worked example of the scaffold-first pattern - see the
-comment above 'scrollClampTests' for what this is actually demonstrating.
+Description: The help modal's layout math - how many lines fit
+('Render.Help.helpInnerHeight') and how scrolling clamps
+('Update.Core.clampHelpScroll').
 -}
 module RenderHelpSpec (tests) where
 
@@ -9,6 +10,7 @@ import Keymap (defaultKeyMap)
 import Render.Help (helpContent, helpInnerHeight)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, testCase, (@?=))
+import Update.Core (clampHelpScroll)
 
 tests :: TestTree
 tests =
@@ -39,14 +41,13 @@ innerHeightTests =
               (helpInnerHeight 200 total <= total)
         ]
 
-{- | The offset-clamping arithmetic used by 'renderHelp' (and mirrored by
-'Update.Core's scrollHelpBy') is:
-
-  maxOffset = max 0 (total - innerH)
-  offset    = max 0 (min maxOffset scroll)
-
-These tests exercise that formula directly, the same way
-'innerHeightTests' exercises 'helpInnerHeight' above.
+{- | 'clampHelpScroll' is the exact function 'Update.Core.scrollHelpBy'
+calls - not a reimplementation of its formula kept alongside it, which
+was tried here first and caught nothing: flipping the @+@ to a @-@ in
+'scrollHelpBy's real arithmetic (inverting every scroll direction) left
+every one of these assertions passing, because they were only checking
+themselves. Calling the production function directly is what makes that
+impossible.
 -}
 scrollClampTests :: TestTree
 scrollClampTests =
@@ -54,27 +55,27 @@ scrollClampTests =
       h = 30
       innerH = helpInnerHeight h total
       maxOffset = max 0 (total - innerH)
-      clamp scroll = max 0 (min maxOffset scroll)
    in testGroup
-        "helpScroll clamping"
+        "clampHelpScroll"
         [ testCase "line-scroll (moveUp/moveDown) moves by exactly 1 line" $
             do
-              clamp (0 + 1) @?= 1
-              clamp (1 - 1) @?= 0
-              clamp (maxOffset - 1 + 1) @?= maxOffset
-              clamp (maxOffset + 1) @?= maxOffset
+              clampHelpScroll total innerH 0 1 @?= 1
+              clampHelpScroll total innerH 1 (-1) @?= 0
+              clampHelpScroll total innerH (maxOffset - 1) 1 @?= maxOffset
+              clampHelpScroll total innerH maxOffset 1 @?= maxOffset
         , testCase "page-scroll (pageUp/pageDown) moves by the visible line count" $
             do
-              clamp (0 + innerH) @?= min innerH maxOffset
-              clamp (maxOffset - innerH) @?= max 0 (maxOffset - innerH)
+              clampHelpScroll total innerH 0 innerH @?= min innerH maxOffset
+              clampHelpScroll total innerH maxOffset (negate innerH)
+                @?= max 0 (maxOffset - innerH)
         , testCase "offset never goes below 0" $
             do
-              clamp (-1) @?= 0
-              clamp (-999) @?= 0
+              clampHelpScroll total innerH 0 (-1) @?= 0
+              clampHelpScroll total innerH 0 (-999) @?= 0
         , testCase "offset never exceeds total - visible" $
             do
-              clamp (maxOffset + 1) @?= maxOffset
-              clamp 99999 @?= maxOffset
+              clampHelpScroll total innerH maxOffset 1 @?= maxOffset
+              clampHelpScroll total innerH 0 99999 @?= maxOffset
         , testCase "opening the modal (helpKey) always resets helpScroll to 0" $
-            clamp 0 @?= 0
+            clampHelpScroll total innerH 0 0 @?= 0
         ]

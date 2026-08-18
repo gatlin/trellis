@@ -45,27 +45,29 @@ import SheetState (
   ChartType (..),
   LiveBinding,
   SheetState (..),
-  colBoundaries,
+  colBoundariesFrom,
   gutterWidth,
   headerHeight,
   heatmapStep,
   previewRect,
-  rowStride,
-  visibleCols,
-  visibleRows,
+  rowBoundariesFrom,
+  statusBarHeight,
  )
 import qualified Termbox2 as Tb2
 import qualified Trellis.UI as UI
 
 {- | Layout shared across a frame's render passes, computed once so each
-piece works from the same numbers.
+piece works from the same numbers. 'geoColBoundaries'\/'geoRowBoundaries'
+are the actual screen-position boundaries of every visible column\/row -
+uniform stride when nothing's been individually resized, but the single
+source of truth for column\/row spans either way, since 'SheetState.colScale'\/
+'SheetState.rowScale' let neighbors differ.
 -}
 data Geometry = Geometry
   { geoOx, geoOy :: Int
   , geoCx, geoCy :: Int
-  , geoCw, geoRs :: Int
   , geoCols, geoRows :: Int
-  , geoBoundaries :: [Int]
+  , geoColBoundaries, geoRowBoundaries :: [Int]
   }
 
 render :: KeyMap -> SheetState -> UI.Screen ()
@@ -75,19 +77,26 @@ render km st = do
   let (ox, oy) = viewportOrigin st
       (cx, cy) = cursor st
       cw = cellWidth st
-      cols = visibleCols cw w
-      rows = visibleRows cw h
+      colBs = colBoundariesFrom cw (colScale st) gutterWidth w ox
+      rowBs =
+        rowBoundariesFrom
+          cw
+          (rowScale st)
+          headerHeight
+          (h - statusBarHeight - 1)
+          oy
+      cols = length colBs - 1
+      rows = length rowBs - 1
       geo =
         Geometry
           { geoOx = ox
           , geoOy = oy
           , geoCx = cx
           , geoCy = cy
-          , geoCw = cw
-          , geoRs = rowStride cw
           , geoCols = cols
           , geoRows = rows
-          , geoBoundaries = colBoundaries cw cols
+          , geoColBoundaries = colBs
+          , geoRowBoundaries = rowBs
           }
       vals = window (ox, oy) cols rows (evaluated (cells st))
       fillPreview = fmap (uncurry previewRect) (fillDrag st)
@@ -145,37 +154,35 @@ renderColumnHeaders
   Geometry
     { geoOx = ox
     , geoCx = cx
-    , geoCw = cw
-    , geoCols = cols
+    , geoColBoundaries = colBs
     } =
-    forM_ [0 .. cols - 1] $ \i ->
+    forM_ (zip [0 ..] (zip colBs (drop 1 colBs))) $ \(i, (x0, x1)) ->
       let (fg, bg) =
             if ox + i == cx then (focusFg, focusBg) else (textFg, textBg)
        in UI.drawText
-            (gutterWidth + i * cw)
+            (x0 + 1)
             0
             fg
             bg
-            (padTo (cw - 1) (show (ox + i)))
+            (padTo (x1 - x0 - 1) (show (ox + i)))
 
 renderGridLines :: Geometry -> UI.Screen ()
 renderGridLines
   Geometry
-    { geoRs = rs
-    , geoRows = rows
-    , geoBoundaries = boundaries
+    { geoRows = rows
+    , geoColBoundaries = colBs
+    , geoRowBoundaries = rowBs
     } = do
-    let nb = length boundaries
-    forM_ [0 .. rows] $ \j -> do
-      let y = headerHeight + j * rs
+    let nb = length colBs
+    forM_ (zip [0 ..] rowBs) $ \(j, y) -> do
       UI.drawHLine
         y
-        (minimum boundaries)
-        (maximum boundaries)
+        (minimum colBs)
+        (maximum colBs)
         gridFg
         gridBg
         0x2500
-      forM_ (zip [0 ..] boundaries) $ \(i, x) ->
+      forM_ (zip [0 ..] colBs) $ \(i, x) ->
         UI.drawGlyph
           x
           y
@@ -198,11 +205,10 @@ renderCells
     , geoOy = oy
     , geoCx = cx
     , geoCy = cy
-    , geoCw = cw
-    , geoRs = rs
     , geoCols = cols
     , geoRows = rows
-    , geoBoundaries = boundaries
+    , geoColBoundaries = colBs
+    , geoRowBoundaries = rowBs
     }
   subs
   outs
@@ -210,56 +216,55 @@ renderCells
   fill
   heat
   vals =
-    forM_ (zip [0 ..] (take rows vals)) $ \(rowIx, rowVals) -> do
-      let sheetRow = oy + rowIx
-          screenRow = headerHeight + rowIx * rs + 1
-          bottomRow = headerHeight + (rowIx + 1) * rs - 1
-          (rowFg, rowBg) =
-            if sheetRow == cy then (focusFg, focusBg) else (textFg, textBg)
-      UI.drawText
-        0
-        screenRow
-        rowFg
-        rowBg
-        (padTo (gutterWidth - 1) (show sheetRow))
-      -- [^1]
-      forM_ boundaries $ \x ->
-        UI.drawVLine x screenRow bottomRow gridFg gridBg 0x2502
-      forM_ (zip [0 ..] (take cols rowVals)) $ \(colIx, val) -> do
-        let sheetCol = ox + colIx
-            focused = (sheetCol, sheetRow) == (cx, cy)
-            inFill = maybe False (inRange (sheetCol, sheetRow)) fill
-            selected = maybe False (inRange (sheetCol, sheetRow)) sel
-            heated = heat >>= Map.lookup (sheetCol, sheetRow)
-            live = Map.member (sheetCol, sheetRow) subs
-            published = Map.member (sheetCol, sheetRow) outs
-            (fg, bg)
-              | focused = (focusFg, focusBg)
-              | inFill = (fillFg, fillBg)
-              -- \| A heatmap outranks a plain completed selection - it's
-              -- the active visualization that selection is now showing,
-              -- not just a passive "this is what's chosen" marker.
-              | Just heatColors <- heated = heatColors
-              | selected = (selectionFg, selectionBg)
-              | live = (liveFg, liveBg)
-              | published = (outFg, outBg)
-              | otherwise = valueColors val
+    forM_ (zip3 [0 ..] (zip rowBs (drop 1 rowBs)) (take rows vals)) $
+      \(rowIx, (yTop, yBot), rowVals) -> do
+        let sheetRow = oy + rowIx
+            screenRow = yTop + 1
+            bottomRow = yBot - 1
+            (rowFg, rowBg) =
+              if sheetRow == cy then (focusFg, focusBg) else (textFg, textBg)
         UI.drawText
-          (gutterWidth + colIx * cw)
+          0
           screenRow
-          fg
-          bg
-          (padTo (cw - 1) (showValue val))
-        -- \| Extends the cell's own colors down through the blank padding
-        -- rows 'rowStride' adds at higher zoom, so a focused cell's
-        -- highlight fills the whole cell block, not just its content line.
-        forM_ [screenRow + 1 .. bottomRow] $ \padRow ->
-          UI.drawText
-            (gutterWidth + colIx * cw)
-            padRow
-            fg
-            bg
-            (padTo (cw - 1) "")
+          rowFg
+          rowBg
+          (padTo (gutterWidth - 1) (show sheetRow))
+        -- [^1]
+        forM_ colBs $ \x ->
+          UI.drawVLine x screenRow bottomRow gridFg gridBg 0x2502
+        forM_ (zip3 [0 ..] (zip colBs (drop 1 colBs)) (take cols rowVals)) $
+          \(colIx, (xLeft, xRight), val) -> do
+            let sheetCol = ox + colIx
+                cellW = xRight - xLeft - 1
+                focused = (sheetCol, sheetRow) == (cx, cy)
+                inFill = maybe False (inRange (sheetCol, sheetRow)) fill
+                selected = maybe False (inRange (sheetCol, sheetRow)) sel
+                heated = heat >>= Map.lookup (sheetCol, sheetRow)
+                live = Map.member (sheetCol, sheetRow) subs
+                published = Map.member (sheetCol, sheetRow) outs
+                (fg, bg)
+                  | focused = (focusFg, focusBg)
+                  | inFill = (fillFg, fillBg)
+                  -- \| A heatmap outranks a plain completed selection - it's
+                  -- the active visualization that selection is now showing,
+                  -- not just a passive "this is what's chosen" marker.
+                  | Just heatColors <- heated = heatColors
+                  | selected = (selectionFg, selectionBg)
+                  | live = (liveFg, liveBg)
+                  | published = (outFg, outBg)
+                  | otherwise = valueColors val
+            UI.drawText
+              (xLeft + 1)
+              screenRow
+              fg
+              bg
+              (padTo cellW (showValue val))
+            -- \| Extends the cell's own colors down through the blank
+            -- padding rows 'rowStride' adds at higher zoom, so a focused
+            -- cell's highlight fills the whole cell block, not just its
+            -- content line.
+            forM_ [screenRow + 1 .. bottomRow] $ \padRow ->
+              UI.drawText (xLeft + 1) padRow fg bg (padTo cellW "")
 
 -- | Is a cell within the rectangle a fill drag's two corners span?
 inRange :: (Int, Int) -> ((Int, Int), (Int, Int)) -> Bool

@@ -10,6 +10,7 @@ module Update.Core (
   Interaction,
   runEditor,
   beginEdit,
+  clampHelpScroll,
 ) where
 
 import Control.Concurrent.STM.MonadIO (TVar)
@@ -29,9 +30,10 @@ import SheetState (
   SheetState (..),
   cellAt,
   cellsInSelection,
+  colScaleStep,
   doubleClickWindow,
  )
-import SheetState.Geometry (initialCellWidth)
+import SheetState.Geometry (clampRange, initialCellWidth)
 import qualified Termbox2 as Tb2
 import Trellis.CPS (CPS, lift, reset, shift)
 import qualified Trellis.Orc as Orc
@@ -46,6 +48,8 @@ import Update.Navigation (
   nudgeSelecting,
   panBy,
   panPage,
+  resizeCol,
+  resizeRow,
   termSize,
   zoomBy,
  )
@@ -138,17 +142,16 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
   -- \| Moves 'helpScroll' by @stepFor visible@ lines, where @visible@ is
   -- however many 'helpContent' lines the modal is currently showing at
   -- once (@const (-1)@\/@const 1@ for a single line regardless of that,
-  -- @negate@\/@id@ for a full page of it) - clamped the same way
-  -- 'Render.Help.renderHelp' itself clamps, so scrolling never end up
-  -- somewhere the render side would immediately re-clamp back from.
+  -- @negate@\/@id@ for a full page of it). All the actual arithmetic -
+  -- applying the step and clamping the result - lives in
+  -- 'clampHelpScroll', not here, so it's exactly what a test calls too.
   scrollHelpBy :: (Int -> Int) -> UI.Action (UI.Store SheetState) IO ()
   scrollHelpBy stepFor = do
     st <- UI.get
     (_, h) <- termSize
     let total = length (helpContent keymap)
         visible = helpInnerHeight h total
-        maxOffset = max 0 (total - visible)
-        offset' = max 0 (min maxOffset (helpScroll st + stepFor visible))
+        offset' = clampHelpScroll total visible (helpScroll st) (stepFor visible)
     UI.put st{helpScroll = offset'}
 
   navigating
@@ -188,6 +191,12 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     | matches (panDown keymap) evt = panPage (0, 1)
     | matches (panLeft keymap) evt = panPage (-1, 0)
     | matches (panRight keymap) evt = panPage (1, 0)
+    -- \| Resize the cursor's current column\/row, relative to the
+    -- current zoom - see 'Update.Navigation.resizeCol'\/'resizeRow'.
+    | matches (growColKey keymap) evt = resizeCol (* colScaleStep)
+    | matches (shrinkColKey keymap) evt = resizeCol (/ colScaleStep)
+    | matches (growRowKey keymap) evt = resizeRow (* colScaleStep)
+    | matches (shrinkRowKey keymap) evt = resizeRow (/ colScaleStep)
     -- \| A fresh press of the select button: also checks for a double-click
     -- within 'doubleClickWindow', opening the cell for editing instead of
     -- just selecting it.
@@ -333,6 +342,8 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     forM_
       ( cellAt
           (cellWidth st)
+          (colScale st)
+          (rowScale st)
           (viewportOrigin st)
           (fromIntegral (Tb2._x evt))
           (fromIntegral (Tb2._y evt))
@@ -348,6 +359,8 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     st <- UI.get
     case cellAt
       (cellWidth st)
+      (colScale st)
+      (rowScale st)
       (viewportOrigin st)
       (fromIntegral (Tb2._x evt))
       (fromIntegral (Tb2._y evt)) of
@@ -373,6 +386,21 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     st <- UI.get
     let existing = existingText st target
     reset (beginEdit root mailbox target existing)
+
+{- | Applies a scroll step (@delta@ lines) to a @current@ 'helpScroll'
+offset and clamps the result into the valid range for the given content
+length and visible line count - never below 0, never past the point
+where the last line is already on screen. This is *all* of
+'scrollHelpBy's arithmetic, factored out specifically so a test can call
+the same function production code calls, rather than a hand-copied
+reimplementation of it (which caught nothing - see the git history of
+"test/RenderHelpSpec.hs" for a demonstrated example of exactly that
+going wrong). Built on 'SheetState.Geometry.clampRange', the same clamp
+primitive the grid's own viewport uses.
+-}
+clampHelpScroll :: Int -> Int -> Int -> Int -> Int
+clampHelpScroll total visible current delta =
+  clampRange 0 (max 0 (total - visible)) (current + delta)
 
 {- [^1]:
 The answer type is fixed to @()@ throughout, matching the fact that every
