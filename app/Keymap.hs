@@ -198,7 +198,7 @@ namedKeys =
 for anything unlisted.
 -}
 namedKeyName :: Tb2.Tb2Key -> String
-namedKeyName k = case lookup k namedKeys of
+namedKeyName k = case lookup k (map swap namedKeys) of
   Just name -> name
   Nothing -> show k
 
