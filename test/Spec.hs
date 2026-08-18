@@ -2,6 +2,7 @@ module Main (main) where
 
 import qualified CliSpec
 import qualified FormulaSpec
+import qualified KeymapSpec
 import qualified LiveSpec
 import qualified RenderSpec
 import qualified SheetFileSpec
@@ -23,4 +24,5 @@ main =
       , CliSpec.tests
       , SheetFileSpec.tests
       , RenderSpec.tests
+      , KeymapSpec.tests
       ]

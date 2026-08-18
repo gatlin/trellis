@@ -1,4 +1,4 @@
-module Test.KeymapSpec (tests) where
+module KeymapSpec (tests) where
 
 import Keymap (
   BaseKey (..),
