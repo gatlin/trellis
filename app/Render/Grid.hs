@@ -274,6 +274,7 @@ renderFooter st h = do
   let (cx, cy) = cursor st
   UI.statusText textFg textBg $
     "Current Position: [" ++ show cx ++ "," ++ show cy ++ "]"
+  UI.footerText "Press ? for help."
   case editor st of
     Just m -> renderEditor m
     Nothing ->
