@@ -37,12 +37,15 @@ renderHelp km = do
   forM_ [y0 + 1 .. yBot - 1] $ \y -> do
     UI.drawGlyph x0 y modalBorderFg modalBorderBg 0x2502
     UI.drawGlyph (x0 + boxW - 1) y modalBorderFg modalBorderBg 0x2502
+  -- Solid black background fill
+  forM_ [y0 + 1 .. yBot - 1] $ \y ->
+    UI.drawText (x0 + 1) y 0 0 (replicate innerW ' ')
   -- Content lines
   forM_ (zip [y0 + 1 ..] content) $ \(y, (key, action)) -> do
     let line
           | null key = action
           | otherwise = padTo keyColW key ++ "  " ++ action
-    UI.drawText (x0 + 1) y textFg textBg (take innerW line)
+    UI.drawText (x0 + 1) y 15 0 (take innerW line)
 
 {- | The (key, action) pairs shown in the help modal, grouped into
 sections separated by blank lines.
