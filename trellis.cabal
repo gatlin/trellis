@@ -119,6 +119,7 @@ test-suite trellis-test
     build-depends:    base,
                       adjunctions,
                       attoparsec,
+                      comonad,
                       containers,
                       directory,
                       filepath,
