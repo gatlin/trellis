@@ -120,6 +120,11 @@ data SheetState = SheetState
   {- ^ When True the help overlay is showing; all navigation/editing input
   is suppressed until Escape (or the help key again) clears it.
   -}
+  , helpScroll :: Int
+  {- ^ How many lines of 'Render.Help.helpContent' are scrolled past, when
+  'helpModal' is showing - reset to 0 each time the modal opens. Only
+  matters when the content is taller than fits on screen.
+  -}
   }
 
 {- | A cell bound to a live\/async source: the 'Trellis.Orc' subscription
@@ -164,6 +169,7 @@ initialState =
     Nothing
     Nothing
     False
+    0
 
 -- | How close together two clicks on the same cell must be to count as one.
 doubleClickWindow :: NominalDiffTime

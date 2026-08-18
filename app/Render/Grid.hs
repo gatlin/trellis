@@ -102,7 +102,7 @@ render km st = do
     (heatmapColors st)
     vals
   renderChart st
-  when (helpModal st) (renderHelp km)
+  when (helpModal st) (renderHelp (helpScroll st) km)
   renderFooter st h
 
 {- | Per-cell colors for an active heatmap, or 'Nothing' when no heatmap is

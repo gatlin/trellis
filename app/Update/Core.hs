@@ -20,6 +20,7 @@ import Formula (Expr)
 import Keymap (KeyMap (..), matches, matchesMouse)
 import Live (OutBinding, declareSubscription, parseLiveSpec)
 import Parser (parseExpr)
+import Render.Help (helpContent, helpInnerHeight)
 import SheetFile (serialize)
 import SheetState (
   ChartType (..),
@@ -39,7 +40,15 @@ import Update.Buffer (clampCursor, deleteAt, deleteBefore, insertAt)
 import Update.Chart (toggleChart)
 import Update.Events (dragging, isKey, isMouse, isShiftKey, printableChar)
 import Update.Fill (commitFill, fillDragTo, keyboardFill)
-import Update.Navigation (moveTo, nudge, nudgeSelecting, panBy, panPage, zoomBy)
+import Update.Navigation (
+  moveTo,
+  nudge,
+  nudgeSelecting,
+  panBy,
+  panPage,
+  termSize,
+  zoomBy,
+ )
 import Update.Subscriptions (
   cancelSubscription,
   drainLiveUpdates,
@@ -120,7 +129,27 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     | matches (cancel keymap) evt
         || matches (helpKey keymap) evt =
         UI.modify (\st -> st{helpModal = False})
+    | matches (moveUp keymap) evt = scrollHelpBy (const (-1))
+    | matches (moveDown keymap) evt = scrollHelpBy (const 1)
+    | matches (pageUp keymap) evt = scrollHelpBy negate
+    | matches (pageDown keymap) evt = scrollHelpBy id
     | otherwise = return ()
+
+  -- \| Moves 'helpScroll' by @stepFor visible@ lines, where @visible@ is
+  -- however many 'helpContent' lines the modal is currently showing at
+  -- once (@const (-1)@\/@const 1@ for a single line regardless of that,
+  -- @negate@\/@id@ for a full page of it) - clamped the same way
+  -- 'Render.Help.renderHelp' itself clamps, so scrolling never end up
+  -- somewhere the render side would immediately re-clamp back from.
+  scrollHelpBy :: (Int -> Int) -> UI.Action (UI.Store SheetState) IO ()
+  scrollHelpBy stepFor = do
+    st <- UI.get
+    (_, h) <- termSize
+    let total = length (helpContent keymap)
+        visible = helpInnerHeight h total
+        maxOffset = max 0 (total - visible)
+        offset' = max 0 (min maxOffset (helpScroll st + stepFor visible))
+    UI.put st{helpScroll = offset'}
 
   navigating
     -- \| Checked ahead of the plain arrow bindings below, which would
@@ -193,7 +222,8 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     | matches (clearCell keymap) evt = clearFocusedCell
     | matches (barChartKey keymap) evt = toggleChart BarChart
     | matches (lineChartKey keymap) evt = toggleChart LineChart
-    | matches (helpKey keymap) evt = UI.modify (\st -> st{helpModal = True})
+    | matches (helpKey keymap) evt =
+        UI.modify (\st -> st{helpModal = True, helpScroll = 0})
     | matches (heatmapKey keymap) evt = toggleChart Heatmap
     | matches (saveKey keymap) evt = saveSheet
     -- \| Otherwise inert while navigating (only 'editing' uses it to

@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               trellis
-version:            0.1.3.0
+version:            0.1.4.0
 synopsis:           a comonadic terminal spreadsheet
 author:             Gatlin Cheyenne Johnson
 maintainer:         gatlin@niltag.net
