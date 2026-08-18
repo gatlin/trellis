@@ -15,7 +15,7 @@ runAction act st =
   UI.move
     (\() st' -> return st')
     act
-    (CS.StoreT (\s -> Identity s) st)
+    (CS.StoreT (Identity id) st)
 
 tests :: TestTree
 tests =
