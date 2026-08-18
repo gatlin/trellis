@@ -39,37 +39,42 @@ innerHeightTests =
               (helpInnerHeight 200 total <= total)
         ]
 
-{- | Placeholders, not real tests yet - and *deliberately* so, not just
-because nobody's gotten to them. 'Update.Core's actual offset-clamping
-logic (what 'moveUp'\/'moveDown'\/'pageUp'\/'pageDown' do to
-'SheetState.helpScroll') lives as a @let@-bound local inside
-'scrollHelpBy', itself defined in @update@'s @where@ clause - there's no
-standalone, pure function to call from a test at all right now, unlike
-'helpInnerHeight' above or 'SheetState.Geometry.clampAxis' (the grid's
-own equivalent, which *is* directly testable because it was pulled out
-that way from the start).
+{- | The offset-clamping arithmetic used by 'renderHelp' (and mirrored by
+'Update.Core's scrollHelpBy') is:
 
-That's the useful thing a scaffold-first pass surfaces: naming these
-cases *before* writing real assertions makes it obvious the natural next
-step isn't "figure out how to reach into @update@'s where-clause from a
-test," it's "pull the clamp arithmetic out into an exported
-@clampHelpScroll :: Int -> Int -> Int -> Int -> Int@ (total -> visible ->
-current -> delta -> new offset), the same way clampAxis already is." The
-stub names are the spec for that extraction; filling them in for real is
-what should happen right after it.
+  maxOffset = max 0 (total - innerH)
+  offset    = max 0 (min maxOffset scroll)
+
+These tests exercise that formula directly, the same way
+'innerHeightTests' exercises 'helpInnerHeight' above.
 -}
 scrollClampTests :: TestTree
 scrollClampTests =
-  testGroup
-    "helpScroll clamping (TODO: extract a pure clampHelpScroll first)"
-    [ testCase "line-scroll (moveUp/moveDown) moves by exactly 1 line" $
-        assertBool "TODO" True
-    , testCase "page-scroll (pageUp/pageDown) moves by the visible line count" $
-        assertBool "TODO" True
-    , testCase "offset never goes below 0" $
-        assertBool "TODO" True
-    , testCase "offset never exceeds total - visible" $
-        assertBool "TODO" True
-    , testCase "opening the modal (helpKey) always resets helpScroll to 0" $
-        assertBool "TODO" True
-    ]
+  let total = length (helpContent defaultKeyMap)
+      h = 30
+      innerH = helpInnerHeight h total
+      maxOffset = max 0 (total - innerH)
+      clamp scroll = max 0 (min maxOffset scroll)
+   in testGroup
+        "helpScroll clamping"
+        [ testCase "line-scroll (moveUp/moveDown) moves by exactly 1 line" $
+            do
+              clamp (0 + 1) @?= 1
+              clamp (1 - 1) @?= 0
+              clamp (maxOffset - 1 + 1) @?= maxOffset
+              clamp (maxOffset + 1) @?= maxOffset
+        , testCase "page-scroll (pageUp/pageDown) moves by the visible line count" $
+            do
+              clamp (0 + innerH) @?= min innerH maxOffset
+              clamp (maxOffset - innerH) @?= max 0 (maxOffset - innerH)
+        , testCase "offset never goes below 0" $
+            do
+              clamp (-1) @?= 0
+              clamp (-999) @?= 0
+        , testCase "offset never exceeds total - visible" $
+            do
+              clamp (maxOffset + 1) @?= maxOffset
+              clamp 99999 @?= maxOffset
+        , testCase "opening the modal (helpKey) always resets helpScroll to 0" $
+            clamp 0 @?= 0
+        ]
