@@ -116,6 +116,10 @@ data SheetState = SheetState
   none is showing. Unlike 'editor', doesn't suspend navigation - see
   'Update.Chart.toggleChart'.
   -}
+  , helpModal :: Bool
+  {- ^ When True the help overlay is showing; all navigation/editing input
+  is suppressed until Escape (or the help key again) clears it.
+  -}
   }
 
 {- | A cell bound to a live\/async source: the 'Trellis.Orc' subscription

@@ -85,7 +85,7 @@ run opts = do
             )
             (cliFile opts)
         )
-        render
+        (render keymap)
         st0
     )
     `finally` teardown root

@@ -112,8 +112,16 @@ update _ _ mailbox outs _ UI.Tick = do
   publishOutUpdates outs
 update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
   st <- UI.get
-  maybe navigating editing (editor st)
+  if helpModal st
+    then helpMode
+    else maybe navigating editing (editor st)
  where
+  helpMode
+    | matches (cancel keymap) evt
+        || matches (helpKey keymap) evt =
+        UI.modify (\st -> st{helpModal = False})
+    | otherwise = return ()
+
   navigating
     -- \| Checked ahead of the plain arrow bindings below, which would
     -- otherwise also match a Shift-held arrow event and swallow it as an
@@ -185,6 +193,7 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     | matches (clearCell keymap) evt = clearFocusedCell
     | matches (barChartKey keymap) evt = toggleChart BarChart
     | matches (lineChartKey keymap) evt = toggleChart LineChart
+    | matches (helpKey keymap) evt = UI.modify (\st -> st{helpModal = True})
     | matches (heatmapKey keymap) evt = toggleChart Heatmap
     | matches (saveKey keymap) evt = saveSheet
     -- \| Otherwise inert while navigating (only 'editing' uses it to

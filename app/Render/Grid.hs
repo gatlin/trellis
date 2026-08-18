@@ -17,8 +17,10 @@ module Render.Grid (
 import Control.Monad (forM_, when)
 import qualified Data.Map.Strict as Map
 import Formula (Value (..), blank, evaluated, renderExpr, showValue, window)
+import Keymap (KeyMap)
 import Render.Chart (renderChart)
 import Render.Editor (renderEditor)
+import Render.Help (renderHelp)
 import Render.Theme (
   fillBg,
   fillFg,
@@ -66,8 +68,8 @@ data Geometry = Geometry
   , geoBoundaries :: [Int]
   }
 
-render :: SheetState -> UI.Screen ()
-render st = do
+render :: KeyMap -> SheetState -> UI.Screen ()
+render km st = do
   w <- UI.width
   h <- UI.height
   let (ox, oy) = viewportOrigin st
@@ -100,6 +102,7 @@ render st = do
     (heatmapColors st)
     vals
   renderChart st
+  when (helpModal st) (renderHelp km)
   renderFooter st h
 
 {- | Per-cell colors for an active heatmap, or 'Nothing' when no heatmap is

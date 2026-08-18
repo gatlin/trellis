@@ -15,6 +15,9 @@ module Keymap (
   loadKeyMap,
   matches,
   matchesMouse,
+  showBinding,
+  showMouseBinding,
+  namedKeyName,
 ) where
 
 import Control.Monad (foldM)
@@ -121,6 +124,8 @@ data KeyMap = KeyMap
   -- ^ Writes the sheet back to the file it was loaded from, if any.
   , editKey :: Binding
   -- ^ Opens the formula editor for the focused cell (same as 'confirm').
+  , helpKey :: Binding
+  -- ^ Opens the help modal listing all keybindings.
   }
 
 {- | Arrows navigate, the wheel zooms, left-click selects\/drags,
@@ -161,6 +166,7 @@ defaultKeyMap =
     , heatmapKey = Plain (Char 'h')
     , saveKey = Plain (Key Tb2.keyCtrlS)
     , editKey = Plain (Key Tb2.keyF2)
+    , helpKey = Plain (Char '?')
     }
 
 -- | The named keys a config file can refer to, beyond a bare character.
@@ -187,6 +193,29 @@ namedKeys =
   , ("Ctrl+S", Tb2.keyCtrlS)
   , ("F2", Tb2.keyF2)
   ]
+
+{- | Reverse-lookup a 'Tb2.Tb2Key' in 'namedKeys', falling back to 'show'
+for anything unlisted.
+-}
+namedKeyName :: Tb2.Tb2Key -> String
+namedKeyName k = case lookup k namedKeys of
+  Just name -> name
+  Nothing -> show k
+
+{- | Render a 'Binding' as a human-readable string for display in the
+help modal.
+-}
+showBinding :: Binding -> String
+showBinding (Plain (Key k)) = namedKeyName k
+showBinding (Plain (Char c)) = [c]
+showBinding (WithAlt b) = "Alt+" ++ showBinding (Plain b)
+showBinding (WithCtrl b) = "Ctrl+" ++ showBinding (Plain b)
+
+{- | Render a 'MouseBinding' as a human-readable string.
+-}
+showMouseBinding :: MouseBinding -> String
+showMouseBinding (MouseBinding k ctrl) =
+  (if ctrl then "Ctrl+" else "") ++ namedKeyName k
 
 {- | Maps a config setting name to the 'KeyMap' field it updates (full
 'Binding' fields only).
@@ -217,6 +246,7 @@ bindingSetters =
   , ("heatmapKey", \k m -> m{heatmapKey = k})
   , ("saveKey", \k m -> m{saveKey = k})
   , ("editKey", \k m -> m{editKey = k})
+  , ("helpKey", \k m -> m{helpKey = k})
   ]
 
 -- | Same, for the mouse-only fields that take a 'MouseBinding'.
@@ -339,6 +369,7 @@ defaultConfigText =
     , "heatmapKey = h"
     , "saveKey = Ctrl+S"
     , "editKey = F2"
+    , "helpKey = ?"
     ]
 
 {- | Reads the keybindings config file (creating it from
