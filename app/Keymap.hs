@@ -24,6 +24,7 @@ import Control.Monad (foldM)
 import Data.Bits ((.&.))
 import Data.Char (isSpace)
 import Data.List (isPrefixOf, stripPrefix)
+import Data.Tuple (swap)
 import System.Directory (
   XdgDirectory (XdgConfig),
   createDirectoryIfMissing,
