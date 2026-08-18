@@ -1,0 +1,41 @@
+name: windows-build
+
+on:
+  push:
+    branches: [windows-port]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: '9.12.2'
+          cabal-version: '3.14.2.0'
+
+      - name: Configure
+        run: cabal configure
+        shell: pwsh
+
+      - name: Build
+        run: cabal build exe:trellis -v3
+        shell: pwsh
+
+      - name: Stage exe
+        run: |
+          $exe = Get-ChildItem -Path dist-newstyle -Recurse -Filter trellis.exe | Select-Object -First 1
+          if (-not $exe) { throw "trellis.exe not found under dist-newstyle" }
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+          Copy-Item $exe.FullName artifact/trellis.exe
+        shell: pwsh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trellis-windows
+          path: artifact/trellis.exe
