@@ -163,6 +163,7 @@ initialState =
     Nothing
     Nothing
     Nothing
+    False
 
 -- | How close together two clicks on the same cell must be to count as one.
 doubleClickWindow :: NominalDiffTime
