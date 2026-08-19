@@ -15,6 +15,7 @@ module Keymap (
   loadKeyMap,
   matches,
   matchesMouse,
+  namedCtrlKey,
   showBinding,
   showMouseBinding,
   namedKeyName,
@@ -22,7 +23,7 @@ module Keymap (
 
 import Control.Monad (foldM)
 import Data.Bits ((.&.))
-import Data.Char (isSpace)
+import Data.Char (isSpace, toLower)
 import Data.List (isPrefixOf, stripPrefix)
 import Data.Tuple (swap)
 import System.Directory (
@@ -70,8 +71,19 @@ matches binding evt = base baseKey evt && altOk && ctrlOk
   on one of those silently broke every one of them - 'saveKey' (Ctrl+S)
   never actually wrote to disk.
   -}
+  {- \| 'WithCtrl (Char c)' has the same problem from the other side: for
+  any letter, termbox2 *also* reports Ctrl+<letter> as its own distinct
+  named key (keyCtrlD, keyCtrlR, ...), not as @(_ch = <letter>, _mod =
+  modCtrl)@ the way this binding assumed - so e.g. 'fillKey' (Ctrl+D)
+  could never match a real keypress either, the same silent-no-op as
+  'saveKey' before it. Where a named key exists, 'base' matches against
+  it directly and this bypasses the (also redundantly-set) mod bit, the
+  same reasoning as above; letters with no named equivalent fall back to
+  the original ch+mod check, unchanged.
+  -}
   ctrlOk
     | isArrowKey baseKey = wantCtrl == (Tb2._mod evt .&. Tb2.modCtrl /= 0)
+    | Char c <- baseKey, wantCtrl, Just _ <- namedCtrlKey c = True
     | not wantCtrl = True
     | otherwise = wantCtrl == (Tb2._mod evt .&. Tb2.modCtrl /= 0)
   isArrowKey (Key k) =
@@ -83,10 +95,52 @@ matches binding evt = base baseKey evt && altOk && ctrlOk
              ]
   isArrowKey (Char _) = False
   base (Key k) e = Tb2._type e == Tb2.eventKey && Tb2._key e == k
-  base (Char c) e =
-    Tb2._type e == Tb2.eventKey
-      && Tb2._key e == 0
-      && Tb2._ch e == fromIntegral (fromEnum c)
+  base (Char c) e
+    | wantCtrl, Just k <- namedCtrlKey c =
+        Tb2._type e == Tb2.eventKey && Tb2._key e == k
+    | otherwise =
+        Tb2._type e == Tb2.eventKey
+          && Tb2._key e == 0
+          && Tb2._ch e == fromIntegral (fromEnum c)
+
+{- | The named 'Tb2.Tb2Key' termbox2 reports for Ctrl+@c@, for the
+letters where one exists - covers the whole alphabet, not just
+'fillKey'\/'fillKeyAlt's default "d"\/"r", so a user's own remapped
+config can bind Ctrl+ any letter and still work. Case-insensitive, since
+a binding's 'Char' is the unshifted key, not literally what Ctrl+Shift+D
+would send.
+-}
+namedCtrlKey :: Char -> Maybe Tb2.Tb2Key
+namedCtrlKey c = lookup (toLower c) table
+ where
+  table =
+    [ ('a', Tb2.keyCtrlA)
+    , ('b', Tb2.keyCtrlB)
+    , ('c', Tb2.keyCtrlC)
+    , ('d', Tb2.keyCtrlD)
+    , ('e', Tb2.keyCtrlE)
+    , ('f', Tb2.keyCtrlF)
+    , ('g', Tb2.keyCtrlG)
+    , ('h', Tb2.keyCtrlH)
+    , ('i', Tb2.keyCtrlI)
+    , ('j', Tb2.keyCtrlJ)
+    , ('k', Tb2.keyCtrlK)
+    , ('l', Tb2.keyCtrlL)
+    , ('m', Tb2.keyCtrlM)
+    , ('n', Tb2.keyCtrlN)
+    , ('o', Tb2.keyCtrlO)
+    , ('p', Tb2.keyCtrlP)
+    , ('q', Tb2.keyCtrlQ)
+    , ('r', Tb2.keyCtrlR)
+    , ('s', Tb2.keyCtrlS)
+    , ('t', Tb2.keyCtrlT)
+    , ('u', Tb2.keyCtrlU)
+    , ('v', Tb2.keyCtrlV)
+    , ('w', Tb2.keyCtrlW)
+    , ('x', Tb2.keyCtrlX)
+    , ('y', Tb2.keyCtrlY)
+    , ('z', Tb2.keyCtrlZ)
+    ]
 
 -- | A mouse button, optionally required to be held together with Ctrl.
 data MouseBinding = MouseBinding

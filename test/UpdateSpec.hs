@@ -4,7 +4,7 @@ import qualified Data.Map.Strict as Map
 import qualified Termbox2 as Tb2
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
-import Keymap (BaseKey (..), Binding (..), matches)
+import Keymap (BaseKey (..), Binding (..), matches, namedCtrlKey)
 import SheetState.Geometry (cellAt)
 import Update (
   clampCursor,
@@ -205,10 +205,15 @@ fillKeyTests =
           @?= False
     ]
 
--- | A Ctrl-held character event.
+{- | A Ctrl-held character event, shaped the way termbox2 actually reports
+it for a letter (its own distinct named key, not @ch@ + a modifier bit -
+see 'Keymap.namedCtrlKey'), not the naive shape a naming convention alone
+would suggest.
+-}
 ctrlCharEvent :: Char -> Tb2.Tb2Event
-ctrlCharEvent c =
-  (charEvent c){Tb2._mod = Tb2.modCtrl}
+ctrlCharEvent c = case namedCtrlKey c of
+  Just k -> (keyEvent k){Tb2._mod = Tb2.modCtrl}
+  Nothing -> (charEvent c){Tb2._mod = Tb2.modCtrl}
 
 clearCellKeyTests :: TestTree
 clearCellKeyTests =
