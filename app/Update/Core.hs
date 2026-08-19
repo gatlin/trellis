@@ -172,8 +172,12 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     -- | Tab moves right, Shift+Tab moves left - the traditional
     -- "next/previous cell" gesture. Shift+Tab is hard-coded (like
     -- Shift+Arrow above) since termbox2 only reports Shift reliably
-    -- on physical keys, not remapped bindings.
-    | isShiftKey evt Tb2.keyCtrlTab = nudge (-1, 0)
+    -- on physical keys, not remapped bindings. It isn't a shift-modified
+    -- Tab event at all - termbox2 reports it as its own distinct key,
+    -- keyBackTab, with no modifier bit set (confirmed live via debug
+    -- trace); checking 'isShiftKey' against keyCtrlTab could never
+    -- match a real keypress.
+    | isKey evt Tb2.keyBackTab = nudge (-1, 0)
     | matches (tabKey keymap) evt = nudge (1, 0)
     | matchesMouse (scrollUp keymap) evt = zoomBy 1
     | matchesMouse (scrollDown keymap) evt = zoomBy (-1)
