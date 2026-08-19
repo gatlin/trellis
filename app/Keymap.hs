@@ -58,7 +58,30 @@ matches binding evt = base baseKey evt && altOk && ctrlOk
     WithAlt b -> (b, True, False)
     WithCtrl b -> (b, False, True)
   altOk = wantAlt == (Tb2._mod evt .&. Tb2.modAlt /= 0)
-  ctrlOk = wantCtrl == (Tb2._mod evt .&. Tb2.modCtrl /= 0)
+  {- \| Arrow keys are the one case where this check is actually needed:
+  termbox2 reports Ctrl+Up via the *same* _key as plain Up, distinguished
+  solely by _mod (per its own header comment - "TB_MOD_CTRL ... only set
+  as modifiers to TB_KEY_ARROW_*"). Every other named "Ctrl+X" key
+  (keyCtrlS, keyCtrlEnter, keyCtrlEsc, keyCtrlTab, ...) already encodes
+  the modifier in its own distinct key constant - but termbox2 *also*
+  sets TB_MOD_CTRL alongside those (confirmed empirically: a real
+  Ctrl+S press arrives as key=keyCtrlS *with* mod=modCtrl set, despite
+  that same header comment), so requiring mod==0 for a 'Plain' binding
+  on one of those silently broke every one of them - 'saveKey' (Ctrl+S)
+  never actually wrote to disk.
+  -}
+  ctrlOk
+    | isArrowKey baseKey = wantCtrl == (Tb2._mod evt .&. Tb2.modCtrl /= 0)
+    | not wantCtrl = True
+    | otherwise = wantCtrl == (Tb2._mod evt .&. Tb2.modCtrl /= 0)
+  isArrowKey (Key k) =
+    k
+      `elem` [ Tb2.keyArrowUp
+             , Tb2.keyArrowDown
+             , Tb2.keyArrowLeft
+             , Tb2.keyArrowRight
+             ]
+  isArrowKey (Char _) = False
   base (Key k) e = Tb2._type e == Tb2.eventKey && Tb2._key e == k
   base (Char c) e =
     Tb2._type e == Tb2.eventKey
