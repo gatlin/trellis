@@ -1,0 +1,39 @@
+name: macos-build
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: haskell-actions/setup@v2
+        id: setup
+        with:
+          ghc-version: '9.12.2'
+          cabal-version: '3.14.2.0'
+
+      - name: Configure
+        run: cabal configure
+
+      - name: Build
+        run: cabal build exe:trellis -v3
+
+      - name: Stage binary
+        run: |
+          exe=$(find dist-newstyle -type f -name trellis -perm -u+x | head -1)
+          if [ -z "$exe" ]; then
+            echo "trellis binary not found under dist-newstyle" >&2
+            exit 1
+          fi
+          mkdir -p artifact
+          cp "$exe" artifact/trellis
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trellis-macos
+          path: artifact/trellis
