@@ -107,20 +107,24 @@ commitColFill x0 (y0, y1) xT
           forM_ [x | x <- [min x0 xT .. max x0 xT], x /= x0] $ \x ->
             fillCell (x0, y) srcExpr (x, y)
 
-{- | Keyboard fill: reads the current selection, classifies it the same
-way a mouse-drag would, and commits immediately. A no-op if there is no
-selection (a single focused cell has nothing to replicate across).
+{- | Keyboard fill: replicates the anchor cell's formula across the rest
+of the current selection, ref-adjusted per destination - 'commitCellFill'
+already handles a row- or column-shaped selection correctly (it's just a
+rectangle with one degenerate extent), so there's no need to classify it
+the way a mouse fill-drag does. ('commitRowFill'\/'commitColFill' solve a
+different problem: extending an existing row\/column-shaped selection
+*orthogonally*, into new rows\/columns a drag adds - meaningless for a
+keyboard selection, which already names its exact target rectangle via
+'anchor'\/'endpoint' and has no such orthogonal extension.) A no-op if
+there is no selection (a single focused cell has nothing to replicate
+across).
 -}
 keyboardFill :: UI.Action (UI.Store SheetState) IO ()
 keyboardFill = do
   st <- UI.get
   case selection st of
     Nothing -> return ()
-    Just (anchor, endpoint) ->
-      case classifySelection anchor (Just (anchor, endpoint)) of
-        FillCell a -> commitCellFill a endpoint
-        FillRow y0 (x0, x1) -> commitRowFill y0 (x0, x1) (snd endpoint)
-        FillCol x0 (y0, y1) -> commitColFill x0 (y0, y1) (fst endpoint)
+    Just (anchor, endpoint) -> commitCellFill anchor endpoint
 
 {- | Writes @srcExpr@ into @pos@, adjusted by @pos@'s offset from
 @source@, cancelling any subscription @pos@ already had - same as
