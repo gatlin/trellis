@@ -16,10 +16,14 @@
     }
     trellis-sheet { display: block; }
     /* A thin, unobtrusive overlay rather than a header competing for
-       layout space - the sheet itself is the whole page. */
+       layout space - the sheet itself is the whole page. Pinned to the
+       *bottom*, not top: the component's own on-screen nav toolbar
+       (arrows/enter/esc/etc, see trellis-sheet.js) lives at top:0 inside
+       the sheet - a top-pinned bar here visually stacked on top of it,
+       making the toolbar's own buttons hard to see/use. */
     #chrome {
       position: fixed;
-      top: 0;
+      bottom: 0;
       left: 0;
       right: 0;
       padding: 4px 8px;
