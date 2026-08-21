@@ -150,8 +150,14 @@ foreign import javascript unsafe
   "window.trellisHost.canvasEl().addEventListener('mouseup', (e) => { $1(e); if (window.__trellisTick) window.__trellisTick(); })"
   registerMouseup :: JSVal -> IO ()
 
+-- A bare hover (no button held) is filtered out here, before it even
+-- reaches Haskell - not just because it isn't a real click (see
+-- mouseKey's own note in trellis-host.mjs), but because forwarding it
+-- anyway would trigger a full immediate tick/redraw on every pixel of
+-- mouse movement, the same wasted-work problem the idle-tick throttling
+-- fixed for the heartbeat case.
 foreign import javascript unsafe
-  "window.trellisHost.canvasEl().addEventListener('mousemove', (e) => { $1(e); if (window.__trellisTick) window.__trellisTick(); })"
+  "window.trellisHost.canvasEl().addEventListener('mousemove', (e) => { if (e.buttons === 0) return; $1(e); if (window.__trellisTick) window.__trellisTick(); })"
   registerMousemove :: JSVal -> IO ()
 
 foreign import javascript unsafe

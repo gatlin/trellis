@@ -143,9 +143,17 @@ function createTrellisHost(canvas, fontPx) {
       const rect = canvas.getBoundingClientRect();
       return Math.floor((e.clientY - rect.top) / cellH);
     },
+    // 0 (matching namedKey's own "unnamed becomes keyNone, inert"
+    // contract) for a bare hover-move with no button held - e.button is
+    // only meaningful for button-press-related events (mousedown,
+    // click, etc.); for mousemove it's always 0 regardless of whether
+    // any button is actually down, so without this check every hover
+    // over the canvas fell through to the switch below and was
+    // indistinguishable from a genuine left-click-press at that cell.
     mouseKey(e) {
       if (e.type === "wheel") return e.deltaY < 0 ? KEY.MouseWheelUp : KEY.MouseWheelDown;
       if (e.type === "mouseup") return KEY.MouseRelease;
+      if (e.type === "mousemove" && e.buttons === 0) return 0;
       switch (e.button) {
         case 0: return KEY.MouseLeft;
         case 1: return KEY.MouseMiddle;

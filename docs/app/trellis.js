@@ -107,7 +107,7 @@ ZC6ZCtrelliszm0zi1zi5zi0zminplaceZCTrellisziUIziScreenZC: ($1) => (window.trelli
 ZC7ZCtrelliszm0zi1zi5zi0zminplaceZCTrellisziUIziScreenZC: ($1) => (window.trellisHost.charCode($1)),
 ZC8ZCtrelliszm0zi1zi5zi0zminplaceZCTrellisziUIziScreenZC: ($1) => (window.trellisHost.namedKey($1)),
 ZC9ZCtrelliszm0zi1zi5zi0zminplaceZCTrellisziUIziScreenZC: ($1) => (window.trellisHost.canvasEl().addEventListener('wheel', (e) => { $1(e); if (window.__trellisTick) window.__trellisTick(); })),
-ZC10ZCtrelliszm0zi1zi5zi0zminplaceZCTrellisziUIziScreenZC: ($1) => (window.trellisHost.canvasEl().addEventListener('mousemove', (e) => { $1(e); if (window.__trellisTick) window.__trellisTick(); })),
+ZC10ZCtrelliszm0zi1zi5zi0zminplaceZCTrellisziUIziScreenZC: ($1) => (window.trellisHost.canvasEl().addEventListener('mousemove', (e) => { if (e.buttons === 0) return; $1(e); if (window.__trellisTick) window.__trellisTick(); })),
 ZC11ZCtrelliszm0zi1zi5zi0zminplaceZCTrellisziUIziScreenZC: ($1) => (window.trellisHost.canvasEl().addEventListener('mouseup', (e) => { $1(e); if (window.__trellisTick) window.__trellisTick(); })),
 ZC12ZCtrelliszm0zi1zi5zi0zminplaceZCTrellisziUIziScreenZC: ($1) => (window.trellisHost.canvasEl().addEventListener('mousedown', (e) => { $1(e); if (window.__trellisTick) window.__trellisTick(); })),
 ZC13ZCtrelliszm0zi1zi5zi0zminplaceZCTrellisziUIziScreenZC: ($1) => (window.trellisHost.canvasEl().addEventListener('keydown', (e) => { $1(e); if (window.__trellisTick) window.__trellisTick(); })),
