@@ -134,5 +134,11 @@ tags
 .aider*
 
 ### wasm ###
+# node_modules is always a build artifact (npm-installed). *.wasm is
+# scoped to wasm/ specifically (a compiled artifact there) - docs/
+# commits its own built .wasm on purpose, for GitHub Pages to serve,
+# and deliberately avoids any path component named "dist" (already
+# ignored globally, see the Haskell section above) to sidestep that
+# rule entirely rather than fight it with negations.
 node_modules/
-*.wasm
+/wasm/**/*.wasm

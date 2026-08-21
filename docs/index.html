@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>trellis</title>
+  <meta name="description" content="Trellis, a comonadic terminal spreadsheet, running in the browser via WebAssembly.">
+  <style>
+    body { background: #111; margin: 0; font-family: monospace; color: #ccc; padding: 16px; }
+    h1 { font-size: 1rem; font-weight: normal; color: #6f6; margin: 0 0 8px; }
+    p { max-width: 60em; line-height: 1.5; }
+    a { color: #6cf; }
+    trellis-sheet { display: block; margin-top: 12px; }
+    #status { color: #6f6; }
+  </style>
+</head>
+<body>
+  <h1>trellis</h1>
+  <p>
+    A comonadic terminal spreadsheet, compiled to WebAssembly and running
+    live in this page - no server, no install. Source at
+    <a href="https://github.com/gatlin/trellis">github.com/gatlin/trellis</a>.
+    Arrow keys to move, Enter or F2 to edit a cell, Enter again to confirm.
+  </p>
+  <div id="status">loading&hellip;</div>
+  <trellis-sheet id="sheet" width="1000" height="600"></trellis-sheet>
+  <script type="module">
+    import "./trellis-sheet.js";
+
+    const sheet = document.getElementById("sheet");
+    const status = document.getElementById("status");
+    sheet.addEventListener("ready", () => { status.textContent = "running"; });
+  </script>
+</body>
+</html>
