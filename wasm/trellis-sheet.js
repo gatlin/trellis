@@ -113,10 +113,23 @@ class TrellisSheet extends HTMLElement {
     // (canvas has tabIndex=0, so it's a valid focus target) runs *after*
     // this handler and silently steals focus back from the hidden input
     // - confirmed empirically, not a defensive guess.
-    canvas.addEventListener("pointerdown", (e) => {
+    //
+    // touch-action: none stops the browser from taking over the gesture
+    // for its own native handling (scroll/zoom/tap-to-focus) at all -
+    // without it, some mobile browsers still apply their own "focus
+    // this element" behavior on gesture *completion* (release), not
+    // just at the initial touch, independent of what preventDefault on
+    // pointerdown alone suppressed. That's also why refocus is repeated
+    // on pointerup, not just pointerdown - lifting the finger is a
+    // second point where a mobile browser can decide to hand focus back
+    // to the (focusable, tabIndex=0) canvas underneath.
+    canvas.style.touchAction = "none";
+    const refocusHiddenInput = (e) => {
       e.preventDefault();
       hiddenInput.focus();
-    });
+    };
+    canvas.addEventListener("pointerdown", refocusHiddenInput);
+    canvas.addEventListener("pointerup", refocusHiddenInput);
 
     // A small fixed toolbar - Arrow/Enter/Esc/Tab/Backspace/F2 - as a
     // robust, focus-independent way to drive navigation/editing,
