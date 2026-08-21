@@ -125,6 +125,12 @@ foreign import javascript unsafe
 foreign import javascript "wrapper sync"
   makeListener :: (JSVal -> IO ()) -> IO JSVal
 
+-- | Same wrapper trick, for the hidden-input text path below, whose
+-- callback only ever needs a single already-decoded Unicode codepoint,
+-- not a raw event (see 'onText').
+foreign import javascript "wrapper sync"
+  makeIntListener :: (CInt -> IO ()) -> IO JSVal
+
 -- | Every listener below also fires an immediate 'tick' right after
 -- delivering the DOM event to Haskell (see 'window.__trellisTick', set
 -- up by @wasm\/main.mjs@ once the module's instantiated) - real input
@@ -164,6 +170,56 @@ foreign import javascript unsafe
   "window.trellisHost.canvasEl().addEventListener('wheel', (e) => { $1(e); if (window.__trellisTick) window.__trellisTick(); })"
   registerWheel :: JSVal -> IO ()
 
+-- = JSFFI: the hidden mobile-keyboard-summoning <input> (see
+-- wasm/trellis-host.mjs's own note on why this exists, and
+-- wasm/trellis-sheet.js for the tap-to-focus wiring that actually gets
+-- keyboard focus onto it). No-ops if a given host was never given one
+-- (window.trellisHost.hiddenInputEl() is null - wasm/main.mjs's
+-- bare-page demo doesn't have one).
+--
+-- No preventDefault here, deliberately, unlike the canvas's own
+-- keydown (registerKeydown above) - the canvas needed it purely to
+-- stop Backspace/arrows from also triggering *page* navigation, a
+-- concern that doesn't exist for a real focused <input> (the browser
+-- already scopes those keys to the focused field). Calling
+-- preventDefault here instead risks suppressing the input's own
+-- native text-editing behaviour, which is exactly what the
+-- text-capture path below depends on - and is well known to break IME
+-- composition outright in some browsers if called during it.
+foreign import javascript unsafe
+  "(() => { const el = window.trellisHost.hiddenInputEl(); if (!el) return; el.addEventListener('keydown', (e) => { $1(e); if (window.__trellisTick) window.__trellisTick(); }); })()"
+  registerHiddenInputKeydown :: JSVal -> IO ()
+
+-- | Real typed *text* on this element - the actually mobile-specific
+-- half of this whole mechanism. A virtual keyboard's keydown for a
+-- printable character is unreliable (autocomplete/predictive text can
+-- substitute or suppress it entirely), so character input is captured
+-- here instead, via the same 'input'/composition events any real text
+-- field already fires for any keyboard, physical or virtual - this
+-- isn't a mobile-only code path, just the one path that also happens
+-- to be required there.
+--
+-- 'composing' tracks IME composition (e.g. Japanese/Chinese input):
+-- 'input' events that fire *during* composition carry not-yet-confirmed
+-- text and are ignored; the composed text arrives via the 'input' event
+-- that follows 'compositionend' (per spec, always after it), once
+-- 'composing' has already flipped back to false.
+--
+-- A deletion (Backspace, etc.) also fires as an 'input' event on most
+-- browsers - inputType starting with "delete" is filtered out here so
+-- it doesn't *also* get treated as inserted text; the corresponding
+-- Backspace keydown (registerHiddenInputKeydown above) already handles
+-- the actual deletion.
+--
+-- Iterates the value with a 'for...of' loop specifically, not a plain
+-- index/char-code walk - that's what correctly iterates by Unicode code
+-- point rather than UTF-16 code unit, so a character outside the Basic
+-- Multilingual Plane (most emoji, for instance) isn't split into two
+-- calls to $1 as two mismatched surrogate halves.
+foreign import javascript unsafe
+  "(() => { const el = window.trellisHost.hiddenInputEl(); if (!el) return; let composing = false; el.addEventListener('compositionstart', () => { composing = true; }); el.addEventListener('compositionend', () => { composing = false; }); el.addEventListener('input', (e) => { if (composing) return; const text = el.value; el.value = ''; if (e.inputType && e.inputType.indexOf('delete') === 0) return; for (const ch of text) { $1(ch.codePointAt(0)); } if (window.__trellisTick) window.__trellisTick(); }); })()"
+  registerHiddenInputText :: JSVal -> IO ()
+
 foreign import javascript unsafe "window.trellisHost.namedKey($1)"
   js_namedKey :: JSVal -> IO CInt
 
@@ -197,9 +253,12 @@ eventQueueRef = unsafePerformIO (newIORef [])
 pushEvent :: InputEvent -> IO ()
 pushEvent e = modifyIORef' eventQueueRef (\q -> q ++ [e])
 
-onKeydown :: JSVal -> IO ()
-onKeydown ev = do
-  js_preventDefault ev -- Backspace/Tab/arrows must not also scroll/navigate the page.
+-- | The shared field-extraction-and-push logic behind both 'onKeydown'
+-- (canvas) and 'onHiddenInputKeydown' - split out since only the canvas
+-- path needs 'js_preventDefault' (see 'registerHiddenInputKeydown's own
+-- note on why the hidden input deliberately doesn't call it).
+deliverKeydown :: JSVal -> IO ()
+deliverKeydown ev = do
   named <- js_namedKey ev
   ch <- js_charCode ev
   m <- js_mods ev
@@ -208,6 +267,44 @@ onKeydown ev = do
       { evtType = Backend.eventKey
       , evtMod = fromIntegral m
       , evtKey = fromIntegral named
+      , evtCh = fromIntegral ch
+      , evtW = 0
+      , evtH = 0
+      , evtX = 0
+      , evtY = 0
+      }
+
+onKeydown :: JSVal -> IO ()
+onKeydown ev = do
+  js_preventDefault ev -- Backspace/Tab/arrows must not also scroll/navigate the page.
+  deliverKeydown ev
+
+{- | The hidden input's own keydown - named keys only (Backspace, Enter,
+arrows, Delete, Tab, Escape, F2, Home\/End\/PgUp\/PgDn). A plain
+printable character is deliberately *not* forwarded from here - it
+comes through 'onText' instead (via 'registerHiddenInputText'), and
+forwarding it from both places would insert every typed character
+twice. 'named' alone doesn't cover Enter (it isn't in 'namedKey's
+vocabulary - see @trellis-host.mjs@'s own comment on why, it reports as
+plain charCode 13 instead), so that's let through as a special case too.
+-}
+onHiddenInputKeydown :: JSVal -> IO ()
+onHiddenInputKeydown ev = do
+  named <- js_namedKey ev
+  ch <- js_charCode ev
+  when (named /= 0 || ch == 13) (deliverKeydown ev)
+
+-- | One already-decoded Unicode codepoint of real typed text, from
+-- 'registerHiddenInputText' - pushed as a plain printable-char event,
+-- the same shape 'charCode' already produces for the canvas's own
+-- keydown path (@evtKey = 0@, the actual character in @evtCh@).
+onText :: CInt -> IO ()
+onText ch =
+  pushEvent
+    InputEvent
+      { evtType = Backend.eventKey
+      , evtMod = 0
+      , evtKey = 0
       , evtCh = fromIntegral ch
       , evtW = 0
       , evtH = 0
@@ -237,6 +334,10 @@ registerListeners :: IO ()
 registerListeners = do
   kd <- makeListener onKeydown
   registerKeydown kd
+  hikd <- makeListener onHiddenInputKeydown
+  registerHiddenInputKeydown hikd
+  txt <- makeIntListener onText
+  registerHiddenInputText txt
   forM_ [registerMousedown, registerMouseup, registerMousemove, registerWheel] $ \reg -> do
     cb <- makeListener onMouse
     reg cb

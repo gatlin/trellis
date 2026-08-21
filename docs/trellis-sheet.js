@@ -25,15 +25,6 @@
 // JSFFI import - see the plan file's "Event loop" note), so there's no
 // window where another instance's activation could interleave and
 // corrupt this one's call.
-//
-// This copy lives under docs/ (a static, self-contained mirror of
-// wasm/trellis-sheet.js) specifically so GitHub Pages - which only
-// serves committed files, no npm install/build step - can host a live
-// demo straight from this directory. Only the import/fetch paths below
-// differ from wasm/trellis-sheet.js (./dist -> ./app, since "dist" is
-// gitignored repo-wide and ./node_modules -> ./vendor/browser_wasi_shim,
-// since node_modules is never committed); keep both copies in sync by
-// hand if the component itself changes.
 
 import { WASI, File, OpenFile, ConsoleStdout, PreopenDirectory } from "./vendor/browser_wasi_shim/index.js";
 import ghc_wasm_jsffi from "./app/trellis.js";
@@ -62,18 +53,66 @@ class TrellisSheet extends HTMLElement {
     shadow.appendChild(canvas);
     this._canvas = canvas;
 
-    this._host = createTrellisHost(canvas, 14);
+    // A real (invisible) <input>, solely to summon a mobile on-screen
+    // keyboard - a bare <canvas> can hold keyboard focus and receive
+    // real keydown events just fine on desktop, but mobile browsers
+    // only ever show their virtual keyboard for a genuine text-input-
+    // capable element, full stop, regardless of the canvas's own
+    // focus/keydown handling. opacity:0 (not display:none/
+    // visibility:hidden, both of which make an element unfocusable) +
+    // 1px size keeps it out of the way visually; font-size:16px is a
+    // deliberate, well-known iOS Safari workaround - a focused input
+    // with a *smaller* font size makes Safari auto-zoom the page when
+    // its keyboard appears, which this avoids entirely.
+    const hiddenInput = document.createElement("input");
+    hiddenInput.type = "text";
+    hiddenInput.autocomplete = "off";
+    hiddenInput.autocapitalize = "off";
+    hiddenInput.setAttribute("autocorrect", "off");
+    hiddenInput.spellcheck = false;
+    hiddenInput.style.position = "absolute";
+    hiddenInput.style.opacity = "0";
+    hiddenInput.style.width = "1px";
+    hiddenInput.style.height = "1px";
+    hiddenInput.style.fontSize = "16px";
+    hiddenInput.style.pointerEvents = "none"; // never steal a tap meant for the canvas underneath
+    shadow.appendChild(hiddenInput);
+    this._hiddenInput = hiddenInput;
+
+    this._host = createTrellisHost(canvas, 14, hiddenInput);
 
     // Registered before _instantiate() below (which is what triggers
     // Haskell's own listener registration, via
-    // Trellis.UI.Screen.registerListeners, on this same canvas) - DOM
-    // listeners on the same element/event fire in registration order,
-    // so this always runs first, and the globals are correctly pointed
-    // at *this* instance by the time Haskell's own listener (and
-    // whatever it calls) runs.
+    // Trellis.UI.Screen.registerListeners, on this same canvas/input) -
+    // DOM listeners on the same element/event fire in registration
+    // order, so this always runs first, and the globals are correctly
+    // pointed at *this* instance by the time Haskell's own listener
+    // (and whatever it calls) runs.
     for (const type of ["keydown", "mousedown", "mouseup", "mousemove", "wheel"]) {
       canvas.addEventListener(type, () => this._activate());
     }
+    for (const type of ["keydown", "input", "compositionstart", "compositionend"]) {
+      hiddenInput.addEventListener(type, () => this._activate());
+    }
+
+    // Tapping/clicking the canvas moves keyboard focus onto the hidden
+    // input instead - synchronously, within the same event handler, not
+    // e.g. a microtask or timeout later. That's not just tidiness: iOS
+    // Safari only honours a programmatic .focus() call as "summon the
+    // keyboard" if it happens synchronously inside a real user gesture's
+    // own call stack. pointerdown (not click) is used specifically
+    // because it's the unified event covering mouse, touch and pen
+    // alike, and because it still fires before the browser's own
+    // default focus-handling for the tap has settled.
+    // preventDefault matters here beyond convention: without it, the
+    // browser's own default "focus the tapped/clicked element" handling
+    // (canvas has tabIndex=0, so it's a valid focus target) runs *after*
+    // this handler and silently steals focus back from the hidden input
+    // - confirmed empirically, not a defensive guess.
+    canvas.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      hiddenInput.focus();
+    });
 
     this._ready = this._instantiate();
   }

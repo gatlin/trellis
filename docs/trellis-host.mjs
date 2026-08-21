@@ -43,7 +43,17 @@ function ctrlLetterCode(key) {
 // before this is called, since cell size is measured once here, not
 // re-measured on resize (a known simplification, not a bug - resizing
 // after the fact isn't supported yet).
-function createTrellisHost(canvas, fontPx) {
+//
+// `hiddenInput`, if given, is a real (invisible) <input> element used
+// solely to summon a mobile on-screen keyboard - a bare <canvas> can
+// hold keyboard focus and receive real keydown events just fine on
+// desktop, but mobile browsers only ever show their virtual keyboard
+// for a genuine text-input-capable element, no matter how the canvas's
+// own focus/keydown handling is set up (see wasm/trellis-sheet.js's own
+// note on the tap-to-focus wiring). Optional and defaults to null -
+// wasm/main.mjs's bare-page demo doesn't have one, and every function
+// below that touches it is written to no-op gracefully when it's null.
+function createTrellisHost(canvas, fontPx, hiddenInput = null) {
   const ctx = canvas.getContext("2d");
   ctx.font = `${fontPx}px monospace`;
   // A monospace font's own advance width is the same for any ASCII
@@ -55,6 +65,9 @@ function createTrellisHost(canvas, fontPx) {
   return {
     canvasEl() {
       return canvas;
+    },
+    hiddenInputEl() {
+      return hiddenInput;
     },
 
     cols() {
