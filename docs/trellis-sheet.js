@@ -130,6 +130,15 @@ class TrellisSheet extends HTMLElement {
     };
     canvas.addEventListener("pointerdown", refocusHiddenInput);
     canvas.addEventListener("pointerup", refocusHiddenInput);
+    // click fires *after* pointerup completes the gesture, as the
+    // browser's own "this was a genuine tap" signal - and is exactly
+    // where a browser's default "focus the tapped element" behavior can
+    // still apply to the (focusable, tabIndex=0) canvas, unsuppressed by
+    // anything pointerdown/pointerup's own preventDefault already did.
+    // Confirmed via live device debug logging: a real blur on the
+    // hidden input followed a real focus by ~170ms, right in the range
+    // of a normal tap's press-to-release-to-click duration.
+    canvas.addEventListener("click", refocusHiddenInput);
 
     // A small fixed toolbar - Arrow/Enter/Esc/Tab/Backspace/F2 - as a
     // robust, focus-independent way to drive navigation/editing,
