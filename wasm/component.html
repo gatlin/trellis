@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>trellis-sheet demo</title>
+  <style>
+    body { background: #111; margin: 0; font-family: monospace; color: #ccc; padding: 8px; }
+    trellis-sheet { display: block; }
+  </style>
+</head>
+<body>
+  <div id="status">loading</div>
+  <trellis-sheet id="sheet" width="1000" height="600"></trellis-sheet>
+  <script type="module">
+    import "./trellis-sheet.js";
+
+    const sheet = document.getElementById("sheet");
+    const status = document.getElementById("status");
+    sheet.addEventListener("ready", () => { status.textContent = "running"; });
+    sheet.addEventListener("cell-out", (e) => {
+      console.log("cell-out", e.detail);
+    });
+  </script>
+</body>
+</html>

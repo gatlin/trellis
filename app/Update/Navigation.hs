@@ -28,11 +28,10 @@ import SheetState (
   visibleCols,
   visibleRows,
  )
-import qualified Termbox2 as Tb2
 import qualified Trellis.UI as UI
 
 termSize :: UI.Action (UI.Store SheetState) IO (Int, Int)
-termSize = UI.liftIO (Tb2.runTermbox2 ((,) <$> Tb2.width <*> Tb2.height))
+termSize = UI.liftIO UI.screenSize
 
 {- | Moves the cursor to an absolute cell, scrolling the viewport to keep it
 visible.

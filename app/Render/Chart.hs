@@ -23,7 +23,6 @@ import Render.Theme (
   textFg,
  )
 import SheetState (Chart (..), ChartType (..), SheetState (..))
-import qualified Termbox2 as Tb2
 import Trellis.Sheet (Sheet2)
 import qualified Trellis.UI as UI
 
@@ -217,7 +216,7 @@ drawBars left top width height indexAlongX labels vals
 from @baseline@ for a positive @eighths@, or down (whole rows only)
 for a negative one.
 -}
-drawVBar :: Tb2.Tb2ColorAttr -> Int -> Int -> Int -> UI.Screen ()
+drawVBar :: UI.Color -> Int -> Int -> Int -> UI.Screen ()
 drawVBar fg x baseline eighths
   | eighths >= 0 = do
       forM_ [1 .. fullRows] $ \i ->
@@ -241,7 +240,7 @@ drawVBar fg x baseline eighths
 from @baseline@ for a positive @eighths@, or left (whole columns
 only) for a negative one.
 -}
-drawHBar :: Tb2.Tb2ColorAttr -> Int -> Int -> Int -> UI.Screen ()
+drawHBar :: UI.Color -> Int -> Int -> Int -> UI.Screen ()
 drawHBar fg y baseline eighths
   | eighths >= 0 = do
       forM_ [1 .. fullCols] $ \i ->

@@ -7,7 +7,7 @@ import Keymap (
   showBinding,
   showMouseBinding,
  )
-import qualified Termbox2 as Tb2
+import qualified Trellis.UI as UI
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -20,9 +20,9 @@ tests =
         [ testCase "Plain Char" $
             showBinding (Plain (Char 'h')) @?= "h"
         , testCase "Plain named Key" $
-            showBinding (Plain (Key Tb2.keyArrowUp)) @?= "ArrowUp"
+            showBinding (Plain (Key UI.keyArrowUp)) @?= "ArrowUp"
         , testCase "WithAlt named Key" $
-            showBinding (WithAlt (Key Tb2.keyArrowUp)) @?= "Alt+ArrowUp"
+            showBinding (WithAlt (Key UI.keyArrowUp)) @?= "Alt+ArrowUp"
         , testCase "WithCtrl Char" $
             showBinding (WithCtrl (Char 'd')) @?= "Ctrl+d"
         , testCase "WithAlt Char" $
@@ -31,13 +31,13 @@ tests =
     , testGroup
         "showMouseBinding"
         [ testCase "no ctrl" $
-            showMouseBinding (MouseBinding Tb2.keyMouseLeft False)
+            showMouseBinding (MouseBinding UI.keyMouseLeft False)
               @?= "MouseLeft"
         , testCase "with ctrl" $
-            showMouseBinding (MouseBinding Tb2.keyMouseLeft True)
+            showMouseBinding (MouseBinding UI.keyMouseLeft True)
               @?= "Ctrl+MouseLeft"
         , testCase "wheel down" $
-            showMouseBinding (MouseBinding Tb2.keyMouseWheelDown False)
+            showMouseBinding (MouseBinding UI.keyMouseWheelDown False)
               @?= "WheelDown"
         ]
     ]

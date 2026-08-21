@@ -2,7 +2,7 @@
 Module: Keymap
 Description: Configurable keybindings, with documented defaults.
 
-Every key "Update" looks for comes from here, not a literal 'Tb2.Tb2Key'
+Every key "Update" looks for comes from here, not a literal 'UI.Key'
 scattered through the code - one place that knows what a keystroke means,
 changeable without touching code. [^1] [^2]
 -}
@@ -21,6 +21,7 @@ module Keymap (
   namedKeyName,
 ) where
 
+import Control.Exception (IOException, try)
 import Control.Monad (foldM)
 import Data.Bits ((.&.))
 import Data.Char (isSpace, toLower)
@@ -34,12 +35,12 @@ import System.Directory (
  )
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
-import qualified Termbox2 as Tb2
+import qualified Trellis.UI as UI
 
 -- | The part of a binding that isn't about whether Alt is held.
 data BaseKey
   = -- | A named key: an arrow, Enter, Delete, and so on.
-    Key Tb2.Tb2Key
+    Key UI.Key
   | {- | An ordinary typed character, case-sensitive - @Char 'k'@ and
     @Char 'K'@ differ, like vim's @j@ vs @J@.
     -}
@@ -51,14 +52,14 @@ data Binding = Plain BaseKey | WithAlt BaseKey | WithCtrl BaseKey
   deriving (Eq, Show)
 
 -- | Does an incoming event match a configured binding?
-matches :: Binding -> Tb2.Tb2Event -> Bool
+matches :: Binding -> UI.InputEvent -> Bool
 matches binding evt = base baseKey evt && altOk && ctrlOk
  where
   (baseKey, wantAlt, wantCtrl) = case binding of
     Plain b -> (b, False, False)
     WithAlt b -> (b, True, False)
     WithCtrl b -> (b, False, True)
-  altOk = wantAlt == (Tb2._mod evt .&. Tb2.modAlt /= 0)
+  altOk = wantAlt == (UI.evtMod evt .&. UI.modAlt /= 0)
   {- \| Arrow keys are the one case where this check is actually needed:
   termbox2 reports Ctrl+Up via the *same* _key as plain Up, distinguished
   solely by _mod (per its own header comment - "TB_MOD_CTRL ... only set
@@ -82,79 +83,79 @@ matches binding evt = base baseKey evt && altOk && ctrlOk
   the original ch+mod check, unchanged.
   -}
   ctrlOk
-    | isArrowKey baseKey = wantCtrl == (Tb2._mod evt .&. Tb2.modCtrl /= 0)
+    | isArrowKey baseKey = wantCtrl == (UI.evtMod evt .&. UI.modCtrl /= 0)
     | Char c <- baseKey, wantCtrl, Just _ <- namedCtrlKey c = True
     | not wantCtrl = True
-    | otherwise = wantCtrl == (Tb2._mod evt .&. Tb2.modCtrl /= 0)
+    | otherwise = wantCtrl == (UI.evtMod evt .&. UI.modCtrl /= 0)
   isArrowKey (Key k) =
     k
-      `elem` [ Tb2.keyArrowUp
-             , Tb2.keyArrowDown
-             , Tb2.keyArrowLeft
-             , Tb2.keyArrowRight
+      `elem` [ UI.keyArrowUp
+             , UI.keyArrowDown
+             , UI.keyArrowLeft
+             , UI.keyArrowRight
              ]
   isArrowKey (Char _) = False
-  base (Key k) e = Tb2._type e == Tb2.eventKey && Tb2._key e == k
+  base (Key k) e = UI.evtType e == UI.eventKey && UI.evtKey e == k
   base (Char c) e
     | wantCtrl, Just k <- namedCtrlKey c =
-        Tb2._type e == Tb2.eventKey && Tb2._key e == k
+        UI.evtType e == UI.eventKey && UI.evtKey e == k
     | otherwise =
-        Tb2._type e == Tb2.eventKey
-          && Tb2._key e == 0
-          && Tb2._ch e == fromIntegral (fromEnum c)
+        UI.evtType e == UI.eventKey
+          && UI.evtKey e == UI.keyNone
+          && UI.evtCh e == fromIntegral (fromEnum c)
 
-{- | The named 'Tb2.Tb2Key' termbox2 reports for Ctrl+@c@, for the
+{- | The named 'UI.Key' termbox2 reports for Ctrl+@c@, for the
 letters where one exists - covers the whole alphabet, not just
 'fillKey'\/'fillKeyAlt's default "d"\/"r", so a user's own remapped
 config can bind Ctrl+ any letter and still work. Case-insensitive, since
 a binding's 'Char' is the unshifted key, not literally what Ctrl+Shift+D
 would send.
 -}
-namedCtrlKey :: Char -> Maybe Tb2.Tb2Key
+namedCtrlKey :: Char -> Maybe UI.Key
 namedCtrlKey c = lookup (toLower c) table
  where
   table =
-    [ ('a', Tb2.keyCtrlA)
-    , ('b', Tb2.keyCtrlB)
-    , ('c', Tb2.keyCtrlC)
-    , ('d', Tb2.keyCtrlD)
-    , ('e', Tb2.keyCtrlE)
-    , ('f', Tb2.keyCtrlF)
-    , ('g', Tb2.keyCtrlG)
-    , ('h', Tb2.keyCtrlH)
-    , ('i', Tb2.keyCtrlI)
-    , ('j', Tb2.keyCtrlJ)
-    , ('k', Tb2.keyCtrlK)
-    , ('l', Tb2.keyCtrlL)
-    , ('m', Tb2.keyCtrlM)
-    , ('n', Tb2.keyCtrlN)
-    , ('o', Tb2.keyCtrlO)
-    , ('p', Tb2.keyCtrlP)
-    , ('q', Tb2.keyCtrlQ)
-    , ('r', Tb2.keyCtrlR)
-    , ('s', Tb2.keyCtrlS)
-    , ('t', Tb2.keyCtrlT)
-    , ('u', Tb2.keyCtrlU)
-    , ('v', Tb2.keyCtrlV)
-    , ('w', Tb2.keyCtrlW)
-    , ('x', Tb2.keyCtrlX)
-    , ('y', Tb2.keyCtrlY)
-    , ('z', Tb2.keyCtrlZ)
+    [ ('a', UI.keyCtrlA)
+    , ('b', UI.keyCtrlB)
+    , ('c', UI.keyCtrlC)
+    , ('d', UI.keyCtrlD)
+    , ('e', UI.keyCtrlE)
+    , ('f', UI.keyCtrlF)
+    , ('g', UI.keyCtrlG)
+    , ('h', UI.keyCtrlH)
+    , ('i', UI.keyCtrlI)
+    , ('j', UI.keyCtrlJ)
+    , ('k', UI.keyCtrlK)
+    , ('l', UI.keyCtrlL)
+    , ('m', UI.keyCtrlM)
+    , ('n', UI.keyCtrlN)
+    , ('o', UI.keyCtrlO)
+    , ('p', UI.keyCtrlP)
+    , ('q', UI.keyCtrlQ)
+    , ('r', UI.keyCtrlR)
+    , ('s', UI.keyCtrlS)
+    , ('t', UI.keyCtrlT)
+    , ('u', UI.keyCtrlU)
+    , ('v', UI.keyCtrlV)
+    , ('w', UI.keyCtrlW)
+    , ('x', UI.keyCtrlX)
+    , ('y', UI.keyCtrlY)
+    , ('z', UI.keyCtrlZ)
     ]
 
 -- | A mouse button, optionally required to be held together with Ctrl.
 data MouseBinding = MouseBinding
-  { mouseKey :: Tb2.Tb2Key
+  { mouseKey :: UI.Key
   , mouseCtrl :: Bool
   }
   deriving (Eq, Show)
 
 -- | Does an incoming mouse event match a configured 'MouseBinding'?
-matchesMouse :: MouseBinding -> Tb2.Tb2Event -> Bool
+matchesMouse :: MouseBinding -> UI.InputEvent -> Bool
 matchesMouse (MouseBinding key ctrl) evt =
-  Tb2._type evt == Tb2.eventMouse
-    && Tb2._key evt == key
-    && ctrl == (Tb2._mod evt .&. Tb2.modCtrl /= 0)
+  UI.evtType evt == UI.eventMouse
+    && UI.evtKey evt == key
+    && ctrl == (UI.evtMod evt .&. UI.modCtrl /= 0)
 
 data KeyMap = KeyMap
   { moveUp, moveDown, moveLeft, moveRight :: Binding
@@ -219,71 +220,71 @@ Delete clears a cell. Kept in sync with 'defaultConfigText' by hand.
 defaultKeyMap :: KeyMap
 defaultKeyMap =
   KeyMap
-    { moveUp = Plain (Key Tb2.keyArrowUp)
-    , moveDown = Plain (Key Tb2.keyArrowDown)
-    , moveLeft = Plain (Key Tb2.keyArrowLeft)
-    , moveRight = Plain (Key Tb2.keyArrowRight)
-    , tabKey = Plain (Key Tb2.keyCtrlTab)
-    , scrollUp = MouseBinding Tb2.keyMouseWheelUp False
-    , scrollDown = MouseBinding Tb2.keyMouseWheelDown False
+    { moveUp = Plain (Key UI.keyArrowUp)
+    , moveDown = Plain (Key UI.keyArrowDown)
+    , moveLeft = Plain (Key UI.keyArrowLeft)
+    , moveRight = Plain (Key UI.keyArrowRight)
+    , tabKey = Plain (Key UI.keyCtrlTab)
+    , scrollUp = MouseBinding UI.keyMouseWheelUp False
+    , scrollDown = MouseBinding UI.keyMouseWheelDown False
     , zoomInKey = Plain (Char '=')
     , zoomOutKey = Plain (Char '-')
     , zoomResetKey = Plain (Char '0')
-    , pageUp = Plain (Key Tb2.keyPgUp)
-    , pageDown = Plain (Key Tb2.keyPgDn)
-    , panUp = WithCtrl (Key Tb2.keyArrowUp)
-    , panDown = WithCtrl (Key Tb2.keyArrowDown)
-    , panLeft = WithCtrl (Key Tb2.keyArrowLeft)
-    , panRight = WithCtrl (Key Tb2.keyArrowRight)
+    , pageUp = Plain (Key UI.keyPgUp)
+    , pageDown = Plain (Key UI.keyPgDn)
+    , panUp = WithCtrl (Key UI.keyArrowUp)
+    , panDown = WithCtrl (Key UI.keyArrowDown)
+    , panLeft = WithCtrl (Key UI.keyArrowLeft)
+    , panRight = WithCtrl (Key UI.keyArrowRight)
     , growColKey = Plain (Char ']')
     , shrinkColKey = Plain (Char '[')
     , growRowKey = Plain (Char '}')
     , shrinkRowKey = Plain (Char '{')
-    , selectButton = MouseBinding Tb2.keyMouseLeft False
-    , panButton = MouseBinding Tb2.keyMouseMiddle False
-    , fillButton = MouseBinding Tb2.keyMouseRight False
+    , selectButton = MouseBinding UI.keyMouseLeft False
+    , panButton = MouseBinding UI.keyMouseMiddle False
+    , fillButton = MouseBinding UI.keyMouseRight False
     , fillKey = WithCtrl (Char 'd')
     , fillKeyAlt = WithCtrl (Char 'r')
-    , confirm = Plain (Key Tb2.keyCtrlEnter)
-    , cancel = Plain (Key Tb2.keyCtrlEsc)
-    , clearCell = Plain (Key Tb2.keyDelete)
+    , confirm = Plain (Key UI.keyCtrlEnter)
+    , cancel = Plain (Key UI.keyCtrlEsc)
+    , clearCell = Plain (Key UI.keyDelete)
     , barChartKey = Plain (Char 'b')
     , lineChartKey = Plain (Char 'l')
     , heatmapKey = Plain (Char 'h')
-    , saveKey = Plain (Key Tb2.keyCtrlS)
-    , editKey = Plain (Key Tb2.keyF2)
+    , saveKey = Plain (Key UI.keyCtrlS)
+    , editKey = Plain (Key UI.keyF2)
     , helpKey = Plain (Char '?')
     }
 
 -- | The named keys a config file can refer to, beyond a bare character.
-namedKeys :: [(String, Tb2.Tb2Key)]
+namedKeys :: [(String, UI.Key)]
 namedKeys =
-  [ ("ArrowUp", Tb2.keyArrowUp)
-  , ("ArrowDown", Tb2.keyArrowDown)
-  , ("ArrowLeft", Tb2.keyArrowLeft)
-  , ("ArrowRight", Tb2.keyArrowRight)
-  , ("WheelUp", Tb2.keyMouseWheelUp)
-  , ("WheelDown", Tb2.keyMouseWheelDown)
-  , ("MouseLeft", Tb2.keyMouseLeft)
-  , ("MouseRight", Tb2.keyMouseRight)
-  , ("MouseMiddle", Tb2.keyMouseMiddle)
-  , ("Enter", Tb2.keyCtrlEnter)
-  , ("Escape", Tb2.keyCtrlEsc)
-  , ("Delete", Tb2.keyDelete)
-  , ("Tab", Tb2.keyCtrlTab)
-  , ("Space", Tb2.keySpace)
-  , ("Home", Tb2.keyHome)
-  , ("End", Tb2.keyEnd)
-  , ("PageUp", Tb2.keyPgUp)
-  , ("PageDown", Tb2.keyPgDn)
-  , ("Ctrl+S", Tb2.keyCtrlS)
-  , ("F2", Tb2.keyF2)
+  [ ("ArrowUp", UI.keyArrowUp)
+  , ("ArrowDown", UI.keyArrowDown)
+  , ("ArrowLeft", UI.keyArrowLeft)
+  , ("ArrowRight", UI.keyArrowRight)
+  , ("WheelUp", UI.keyMouseWheelUp)
+  , ("WheelDown", UI.keyMouseWheelDown)
+  , ("MouseLeft", UI.keyMouseLeft)
+  , ("MouseRight", UI.keyMouseRight)
+  , ("MouseMiddle", UI.keyMouseMiddle)
+  , ("Enter", UI.keyCtrlEnter)
+  , ("Escape", UI.keyCtrlEsc)
+  , ("Delete", UI.keyDelete)
+  , ("Tab", UI.keyCtrlTab)
+  , ("Space", UI.keySpace)
+  , ("Home", UI.keyHome)
+  , ("End", UI.keyEnd)
+  , ("PageUp", UI.keyPgUp)
+  , ("PageDown", UI.keyPgDn)
+  , ("Ctrl+S", UI.keyCtrlS)
+  , ("F2", UI.keyF2)
   ]
 
-{- | Reverse-lookup a 'Tb2.Tb2Key' in 'namedKeys', falling back to 'show'
+{- | Reverse-lookup a 'UI.Key' in 'namedKeys', falling back to 'show'
 for anything unlisted.
 -}
-namedKeyName :: Tb2.Tb2Key -> String
+namedKeyName :: UI.Key -> String
 namedKeyName k = case lookup k (map swap namedKeys) of
   Just name -> name
   Nothing -> show k
@@ -474,19 +475,31 @@ defaultConfigText =
 {- | Reads the keybindings config file (creating it from
 'defaultConfigText' if missing), applying each @setting = value@ line as
 an override of 'defaultKeyMap'. Unrecognised settings warn to stderr.
+Falls back to 'defaultKeyMap' on any I\/O failure reaching the config
+file at all (not just "it doesn't exist yet") - a real, general
+robustness gap, not a platform-specific one: under wasm32-wasi's minimal
+in-browser filesystem there's no writable directory to create at all,
+and 'configPath' unconditionally calls 'createDirectoryIfMissing' before
+even checking whether the file exists, so an unguarded 'loadKeyMap'
+would throw and crash startup before the UI ever mounts.
 -}
 loadKeyMap :: IO KeyMap
 loadKeyMap = do
-  path <- configPath
-  exists <- doesFileExist path
-  if exists
-    then do
-      contents <- readFile path
-      foldM applyLine defaultKeyMap (zip [1 :: Int ..] (lines contents))
-    else do
-      writeFile path defaultConfigText
-      pure defaultKeyMap
+  result <- try loadFromDisk :: IO (Either IOException KeyMap)
+  case result of
+    Right km -> pure km
+    Left _ -> pure defaultKeyMap
  where
+  loadFromDisk = do
+    path <- configPath
+    exists <- doesFileExist path
+    if exists
+      then do
+        contents <- readFile path
+        foldM applyLine defaultKeyMap (zip [1 :: Int ..] (lines contents))
+      else do
+        writeFile path defaultConfigText
+        pure defaultKeyMap
   applyLine km (lineNo, raw) = case parseLine raw of
     Nothing -> pure km
     Just (field, value) -> case lookup field bindingSetters of
@@ -528,8 +541,8 @@ two input modes are mutually exclusive.
 -}
 
 {- [^2]:
-'Tb2.keyBackspace'\/'keyBackspace2' (two wire encodings of the same key) and
-'Tb2.keyMouseRelease' (termbox2 doesn't say which button released) are
+'UI.keyBackspace'\/'keyBackspace2' (two wire encodings of the same key) and
+'UI.keyMouseRelease' (termbox2 doesn't say which button released) are
 deliberately unbindable. Mouse-only settings use 'MouseBinding', not
 'Binding', since termbox2 never reports a character for a mouse event.
 Ctrl is fair game there (unlike Alt/Shift) because it arrives in the same

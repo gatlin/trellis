@@ -15,6 +15,7 @@ module Update.Core (
 
 import Control.Concurrent.STM.MonadIO (TVar)
 import Control.Monad (forM_, when)
+import Data.IORef (IORef, readIORef)
 import qualified Data.Map.Strict as Map
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Formula (Expr)
@@ -34,7 +35,6 @@ import SheetState (
   doubleClickWindow,
  )
 import SheetState.Geometry (clampRange, initialCellWidth)
-import qualified Termbox2 as Tb2
 import Trellis.CPS (CPS, lift, reset, shift)
 import qualified Trellis.Orc as Orc
 import qualified Trellis.UI as UI
@@ -112,18 +112,26 @@ beginEdit root mailbox pos initial = do
             UI.modify (\st -> st{cells = Map.insert pos expr (cells st)})
           Left _ -> return ()
 
+{- | @outsRef@ is read fresh every 'UI.Tick' rather than closed over as a
+fixed list - native's own set never actually changes after startup, but
+the wasm backend's @watchOut@ (see @app-wasi/Main.hs@) can append a new
+'OutBinding' at any time from outside the normal dispatch loop entirely,
+and this is what lets that show up without needing a way to run 'UI.modify'
+from there too.
+-}
 update ::
   KeyMap ->
   Orc.Group ->
   TVar [((Int, Int), Expr)] ->
-  [OutBinding] ->
+  IORef [OutBinding] ->
   Maybe FilePath ->
   UI.Event ->
   UI.Action (UI.Store SheetState) IO ()
-update _ _ mailbox outs _ UI.Tick = do
+update _ _ mailbox outsRef _ UI.Tick = do
   drainLiveUpdates mailbox
+  outs <- UI.liftIO (readIORef outsRef)
   publishOutUpdates outs
-update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
+update keymap root mailbox _outs maybeFile (UI.Input evt) = do
   st <- UI.get
   if helpModal st
     then helpMode
@@ -161,15 +169,15 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     -- the physical arrow keys, like 'editing's cursor movement, since
     -- Shift is a modifier termbox2 only ever reports on those, not on a
     -- remapped 'moveUp' binding.
-    | isShiftKey evt Tb2.keyArrowUp = nudgeSelecting (0, -1)
-    | isShiftKey evt Tb2.keyArrowDown = nudgeSelecting (0, 1)
-    | isShiftKey evt Tb2.keyArrowLeft = nudgeSelecting (-1, 0)
-    | isShiftKey evt Tb2.keyArrowRight = nudgeSelecting (1, 0)
+    | isShiftKey evt UI.keyArrowUp = nudgeSelecting (0, -1)
+    | isShiftKey evt UI.keyArrowDown = nudgeSelecting (0, 1)
+    | isShiftKey evt UI.keyArrowLeft = nudgeSelecting (-1, 0)
+    | isShiftKey evt UI.keyArrowRight = nudgeSelecting (1, 0)
     | matches (moveUp keymap) evt = nudge (0, -1)
     | matches (moveDown keymap) evt = nudge (0, 1)
     | matches (moveLeft keymap) evt = nudge (-1, 0)
     | matches (moveRight keymap) evt = nudge (1, 0)
-    -- | Tab moves right, Shift+Tab moves left - the traditional
+    -- \| Tab moves right, Shift+Tab moves left - the traditional
     -- "next/previous cell" gesture. Shift+Tab is hard-coded (like
     -- Shift+Arrow above) since termbox2 only reports Shift reliably
     -- on physical keys, not remapped bindings. It isn't a shift-modified
@@ -177,7 +185,7 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     -- keyBackTab, with no modifier bit set (confirmed live via debug
     -- trace); checking 'isShiftKey' against keyCtrlTab could never
     -- match a real keypress.
-    | isKey evt Tb2.keyBackTab = nudge (-1, 0)
+    | isKey evt UI.keyBackTab = nudge (-1, 0)
     | matches (tabKey keymap) evt = nudge (1, 0)
     | matchesMouse (scrollUp keymap) evt = zoomBy 1
     | matchesMouse (scrollDown keymap) evt = zoomBy (-1)
@@ -211,24 +219,24 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
     -- route through 'panBy' - it tells them apart itself via whether
     -- 'panAnchor' is already set.
     | matchesMouse (panButton keymap) evt =
-        panBy (fromIntegral (Tb2._x evt)) (fromIntegral (Tb2._y evt))
+        panBy (fromIntegral (UI.evtX evt)) (fromIntegral (UI.evtY evt))
     -- \| Same self-distinguishing shape as 'panBy', for the fill gesture.
     | matchesMouse (fillButton keymap) evt =
-        fillDragTo (fromIntegral (Tb2._x evt)) (fromIntegral (Tb2._y evt))
+        fillDragTo (fromIntegral (UI.evtX evt)) (fromIntegral (UI.evtY evt))
     -- \| Keyboard fill: replicate the current selection's source across
     -- the selection, the keyboard equivalent of right-click-drag.
     | matches (fillKey keymap) evt = keyboardFill
     | matches (fillKeyAlt keymap) evt = keyboardFill
     -- \| Release isn't bound to anything, but still commits any
     -- in-progress fill and clears both drag anchors. [^3]
-    | isMouse evt Tb2.keyMouseRelease = do
+    | isMouse evt UI.keyMouseRelease = do
         commitFill
         UI.modify (\st -> st{panAnchor = Nothing, fillDrag = Nothing})
     | matches (confirm keymap) evt = beginEditHere
-    | Tb2._type evt == Tb2.eventKey
-        && ( Tb2._key evt == Tb2.keyCtrlEnter
-             || Tb2._ch evt == 13
-             || Tb2._ch evt == 10
+    | UI.evtType evt == UI.eventKey
+        && ( UI.evtKey evt == UI.keyCtrlEnter
+               || UI.evtCh evt == 13
+               || UI.evtCh evt == 10
            ) =
         beginEditHere
     | matches (editKey keymap) evt = beginEditHere
@@ -252,28 +260,28 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
   editing est
     | matches (confirm keymap) evt
         || matches (editKey keymap) evt
-        || ( Tb2._type evt == Tb2.eventKey
-             && ( Tb2._ch evt == 13
-                  || Tb2._ch evt == 10
-                  || Tb2._key evt == Tb2.keyCtrlM
-                )
+        || ( UI.evtType evt == UI.eventKey
+               && ( UI.evtCh evt == 13
+                      || UI.evtCh evt == 10
+                      || UI.evtKey evt == UI.keyCtrlM
+                  )
            ) =
         closeEditor est (Just (editorBuffer est))
     | matches (cancel keymap) evt = closeEditor est Nothing
     -- \| Cursor movement is always the physical arrow keys\/Home\/End,
     -- never routed through the keymap - unlike sheet navigation, so it
     -- can't be broken by a remap like @moveLeft = h@.
-    | isKey evt Tb2.keyArrowLeft = moveCursor (\p b -> clampCursor (p - 1) b)
-    | isKey evt Tb2.keyArrowRight = moveCursor (\p b -> clampCursor (p + 1) b)
-    | isKey evt Tb2.keyHome = moveCursor (\_ _ -> 0)
-    | isKey evt Tb2.keyEnd = moveCursor (\_ b -> length b)
-    | isKey evt Tb2.keyCtrlA = moveCursor (\_ _ -> 0)
-    | isKey evt Tb2.keyCtrlE = moveCursor (\_ b -> length b)
-    | isKey evt Tb2.keyDelete = editBuffer deleteAt
+    | isKey evt UI.keyArrowLeft = moveCursor (\p b -> clampCursor (p - 1) b)
+    | isKey evt UI.keyArrowRight = moveCursor (\p b -> clampCursor (p + 1) b)
+    | isKey evt UI.keyHome = moveCursor (\_ _ -> 0)
+    | isKey evt UI.keyEnd = moveCursor (\_ b -> length b)
+    | isKey evt UI.keyCtrlA = moveCursor (\_ _ -> 0)
+    | isKey evt UI.keyCtrlE = moveCursor (\_ b -> length b)
+    | isKey evt UI.keyDelete = editBuffer deleteAt
     -- \| Both wire encodings of "backspace" are accepted unconditionally -
     -- which one a terminal sends isn't a preference to configure, it's a
     -- compatibility fact about that terminal.
-    | isKey evt Tb2.keyBackspace || isKey evt Tb2.keyBackspace2 =
+    | isKey evt UI.keyBackspace || isKey evt UI.keyBackspace2 =
         editBuffer deleteBefore
     | Just c <- printableChar evt = editBuffer (insertAt c)
     | otherwise = return ()
@@ -349,8 +357,8 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
           (colScale st)
           (rowScale st)
           (viewportOrigin st)
-          (fromIntegral (Tb2._x evt))
-          (fromIntegral (Tb2._y evt))
+          (fromIntegral (UI.evtX evt))
+          (fromIntegral (UI.evtY evt))
       )
       $ \target -> do
         moveTo target
@@ -366,8 +374,8 @@ update keymap root mailbox _outs maybeFile (UI.InputEvent evt) = do
       (colScale st)
       (rowScale st)
       (viewportOrigin st)
-      (fromIntegral (Tb2._x evt))
-      (fromIntegral (Tb2._y evt)) of
+      (fromIntegral (UI.evtX evt))
+      (fromIntegral (UI.evtY evt)) of
       Nothing -> UI.modify (\st -> st{selection = Nothing, chart = Nothing})
       Just target -> do
         now <- UI.liftIO getCurrentTime

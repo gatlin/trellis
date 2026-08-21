@@ -1,7 +1,7 @@
 module UpdateSpec (tests) where
 
 import qualified Data.Map.Strict as Map
-import qualified Termbox2 as Tb2
+import qualified Trellis.UI as UI
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
 import Keymap (BaseKey (..), Binding (..), matches, namedCtrlKey)
@@ -19,41 +19,41 @@ import Update (
  )
 import Update.Events (isShiftKey)
 
--- | A named-key event, e.g. an arrow key: '_ch' is unused, '_key' is set.
-keyEvent :: Tb2.Tb2Key -> Tb2.Tb2Event
+-- | A named-key event, e.g. an arrow key: 'UI.evtCh' is unused, 'UI.evtKey' is set.
+keyEvent :: UI.Key -> UI.InputEvent
 keyEvent k =
-  Tb2.Tb2Event
-    { Tb2._type = Tb2.eventKey
-    , Tb2._mod = 0
-    , Tb2._key = k
-    , Tb2._ch = 0
-    , Tb2._w = 0
-    , Tb2._h = 0
-    , Tb2._x = 0
-    , Tb2._y = 0
+  UI.InputEvent
+    { UI.evtType = UI.eventKey
+    , UI.evtMod = 0
+    , UI.evtKey = k
+    , UI.evtCh = 0
+    , UI.evtW = 0
+    , UI.evtH = 0
+    , UI.evtX = 0
+    , UI.evtY = 0
     }
 
--- | An ordinary typed character: no '_key', just a codepoint in '_ch'.
-charEvent :: Char -> Tb2.Tb2Event
-charEvent c = (keyEvent 0){Tb2._ch = fromIntegral (fromEnum c)}
+-- | An ordinary typed character: no 'UI.evtKey', just a codepoint in 'UI.evtCh'.
+charEvent :: Char -> UI.InputEvent
+charEvent c = (keyEvent 0){UI.evtCh = fromIntegral (fromEnum c)}
 
 -- | A mouse event at the origin, optionally mid-drag.
-mouseEvent :: Tb2.Tb2Key -> Bool -> Tb2.Tb2Event
+mouseEvent :: UI.Key -> Bool -> UI.InputEvent
 mouseEvent k isDragging =
-  Tb2.Tb2Event
-    { Tb2._type = Tb2.eventMouse
-    , Tb2._mod = if isDragging then Tb2.modMotion else 0
-    , Tb2._key = k
-    , Tb2._ch = 0
-    , Tb2._w = 0
-    , Tb2._h = 0
-    , Tb2._x = 0
-    , Tb2._y = 0
+  UI.InputEvent
+    { UI.evtType = UI.eventMouse
+    , UI.evtMod = if isDragging then UI.modMotion else 0
+    , UI.evtKey = k
+    , UI.evtCh = 0
+    , UI.evtW = 0
+    , UI.evtH = 0
+    , UI.evtX = 0
+    , UI.evtY = 0
     }
 
 -- | A named-key event with the Shift modifier held.
-shiftKeyEvent :: Tb2.Tb2Key -> Tb2.Tb2Event
-shiftKeyEvent k = (keyEvent k){Tb2._mod = Tb2.modShift}
+shiftKeyEvent :: UI.Key -> UI.InputEvent
+shiftKeyEvent k = (keyEvent k){UI.evtMod = UI.modShift}
 
 tests :: TestTree
 tests =
@@ -82,15 +82,15 @@ isKeyIsMouseTests =
   testGroup
     "isKey / isMouse"
     [ testCase "isKey matches a key event with the same key" $
-        isKey (keyEvent Tb2.keyArrowUp) Tb2.keyArrowUp @?= True
+        isKey (keyEvent UI.keyArrowUp) UI.keyArrowUp @?= True
     , testCase "isKey rejects a different key" $
-        isKey (keyEvent Tb2.keyArrowUp) Tb2.keyArrowDown @?= False
+        isKey (keyEvent UI.keyArrowUp) UI.keyArrowDown @?= False
     , testCase "isKey rejects a mouse event" $
-        isKey (mouseEvent Tb2.keyMouseLeft False) Tb2.keyMouseLeft @?= False
+        isKey (mouseEvent UI.keyMouseLeft False) UI.keyMouseLeft @?= False
     , testCase "isMouse matches a mouse event with the same button" $
-        isMouse (mouseEvent Tb2.keyMouseLeft False) Tb2.keyMouseLeft @?= True
+        isMouse (mouseEvent UI.keyMouseLeft False) UI.keyMouseLeft @?= True
     , testCase "isMouse rejects a key event" $
-        isMouse (keyEvent Tb2.keyArrowUp) Tb2.keyMouseLeft @?= False
+        isMouse (keyEvent UI.keyArrowUp) UI.keyMouseLeft @?= False
     ]
 
 draggingTests :: TestTree
@@ -98,9 +98,9 @@ draggingTests =
   testGroup
     "dragging"
     [ testCase "a plain press is not a drag" $
-        dragging (mouseEvent Tb2.keyMouseLeft False) @?= False
+        dragging (mouseEvent UI.keyMouseLeft False) @?= False
     , testCase "a motion event is a drag" $
-        dragging (mouseEvent Tb2.keyMouseLeft True) @?= True
+        dragging (mouseEvent UI.keyMouseLeft True) @?= True
     ]
 
 printableCharTests :: TestTree
@@ -110,7 +110,7 @@ printableCharTests =
     [ testCase "extracts the character from a char event" $
         printableChar (charEvent 'k') @?= Just 'k'
     , testCase "is Nothing for a named-key event" $
-        printableChar (keyEvent Tb2.keyArrowUp) @?= Nothing
+        printableChar (keyEvent UI.keyArrowUp) @?= Nothing
     ]
 
 isValidTests :: TestTree
@@ -177,10 +177,10 @@ zoomKeyTests =
         matches (Plain (Char '0')) (charEvent '0')
           @?= True
     , testCase "'=' does not match an unrelated key" $
-        matches (Plain (Char '=')) (keyEvent Tb2.keyArrowUp)
+        matches (Plain (Char '=')) (keyEvent UI.keyArrowUp)
           @?= False
     , testCase "'=' does not match a mouse event" $
-        matches (Plain (Char '=')) (mouseEvent Tb2.keyMouseLeft False)
+        matches (Plain (Char '=')) (mouseEvent UI.keyMouseLeft False)
           @?= False
     ]
 
@@ -198,10 +198,10 @@ fillKeyTests =
         matches (WithCtrl (Char 'd')) (charEvent 'd')
           @?= False
     , testCase "Ctrl+d does not match an unrelated key" $
-        matches (WithCtrl (Char 'd')) (keyEvent Tb2.keyArrowUp)
+        matches (WithCtrl (Char 'd')) (keyEvent UI.keyArrowUp)
           @?= False
     , testCase "Ctrl+d does not match a mouse event" $
-        matches (WithCtrl (Char 'd')) (mouseEvent Tb2.keyMouseLeft False)
+        matches (WithCtrl (Char 'd')) (mouseEvent UI.keyMouseLeft False)
           @?= False
     ]
 
@@ -210,23 +210,23 @@ it for a letter (its own distinct named key, not @ch@ + a modifier bit -
 see 'Keymap.namedCtrlKey'), not the naive shape a naming convention alone
 would suggest.
 -}
-ctrlCharEvent :: Char -> Tb2.Tb2Event
+ctrlCharEvent :: Char -> UI.InputEvent
 ctrlCharEvent c = case namedCtrlKey c of
-  Just k -> (keyEvent k){Tb2._mod = Tb2.modCtrl}
-  Nothing -> (charEvent c){Tb2._mod = Tb2.modCtrl}
+  Just k -> (keyEvent k){UI.evtMod = UI.modCtrl}
+  Nothing -> (charEvent c){UI.evtMod = UI.modCtrl}
 
 clearCellKeyTests :: TestTree
 clearCellKeyTests =
   testGroup
     "clearCell key"
     [ testCase "Delete matches clearCell binding" $
-        matches (Plain (Key Tb2.keyDelete)) (keyEvent Tb2.keyDelete)
+        matches (Plain (Key UI.keyDelete)) (keyEvent UI.keyDelete)
           @?= True
     , testCase "Delete does not match an unrelated key" $
-        matches (Plain (Key Tb2.keyDelete)) (keyEvent Tb2.keyArrowUp)
+        matches (Plain (Key UI.keyDelete)) (keyEvent UI.keyArrowUp)
           @?= False
     , testCase "Delete does not match a mouse event" $
-        matches (Plain (Key Tb2.keyDelete)) (mouseEvent Tb2.keyMouseLeft False)
+        matches (Plain (Key UI.keyDelete)) (mouseEvent UI.keyMouseLeft False)
           @?= False
     ]
 
@@ -235,13 +235,13 @@ editKeyTests =
   testGroup
     "editKey (F2)"
     [ testCase "F2 matches editKey binding" $
-        matches (Plain (Key Tb2.keyF2)) (keyEvent Tb2.keyF2)
+        matches (Plain (Key UI.keyF2)) (keyEvent UI.keyF2)
           @?= True
     , testCase "F2 does not match an unrelated key" $
-        matches (Plain (Key Tb2.keyF2)) (keyEvent Tb2.keyArrowUp)
+        matches (Plain (Key UI.keyF2)) (keyEvent UI.keyArrowUp)
           @?= False
     , testCase "F2 does not match a mouse event" $
-        matches (Plain (Key Tb2.keyF2)) (mouseEvent Tb2.keyMouseLeft False)
+        matches (Plain (Key UI.keyF2)) (mouseEvent UI.keyMouseLeft False)
           @?= False
     ]
 
@@ -250,15 +250,15 @@ shiftKeyTests =
   testGroup
     "isShiftKey"
     [ testCase "Shift+ArrowUp matches ArrowUp" $
-        isShiftKey (shiftKeyEvent Tb2.keyArrowUp) Tb2.keyArrowUp @?= True
+        isShiftKey (shiftKeyEvent UI.keyArrowUp) UI.keyArrowUp @?= True
     , testCase "ArrowUp without Shift does not match" $
-        isShiftKey (keyEvent Tb2.keyArrowUp) Tb2.keyArrowUp @?= False
+        isShiftKey (keyEvent UI.keyArrowUp) UI.keyArrowUp @?= False
     , testCase "Shift+ArrowUp does not match ArrowDown" $
-        isShiftKey (shiftKeyEvent Tb2.keyArrowUp) Tb2.keyArrowDown @?= False
+        isShiftKey (shiftKeyEvent UI.keyArrowUp) UI.keyArrowDown @?= False
     , testCase "a mouse event never matches" $
-        isShiftKey (mouseEvent Tb2.keyMouseLeft False) Tb2.keyArrowUp @?= False
+        isShiftKey (mouseEvent UI.keyMouseLeft False) UI.keyArrowUp @?= False
     , testCase "Shift+ArrowDown does not match ArrowUp" $
-        isShiftKey (shiftKeyEvent Tb2.keyArrowDown) Tb2.keyArrowUp @?= False
+        isShiftKey (shiftKeyEvent UI.keyArrowDown) UI.keyArrowUp @?= False
     ]
 
 gutterHeaderClickTests :: TestTree
@@ -324,15 +324,15 @@ pageKeyTests =
   testGroup
     "page keys"
     [ testCase "PageUp matches pageUp binding" $
-        matches (Plain (Key Tb2.keyPgUp)) (keyEvent Tb2.keyPgUp)
+        matches (Plain (Key UI.keyPgUp)) (keyEvent UI.keyPgUp)
           @?= True
     , testCase "PageDown matches pageDown binding" $
-        matches (Plain (Key Tb2.keyPgDn)) (keyEvent Tb2.keyPgDn)
+        matches (Plain (Key UI.keyPgDn)) (keyEvent UI.keyPgDn)
           @?= True
     , testCase "PageUp does not match PageDown" $
-        matches (Plain (Key Tb2.keyPgUp)) (keyEvent Tb2.keyPgDn)
+        matches (Plain (Key UI.keyPgUp)) (keyEvent UI.keyPgDn)
           @?= False
     , testCase "PageUp does not match a mouse event" $
-        matches (Plain (Key Tb2.keyPgUp)) (mouseEvent Tb2.keyMouseLeft False)
+        matches (Plain (Key UI.keyPgUp)) (mouseEvent UI.keyMouseLeft False)
           @?= False
     ]

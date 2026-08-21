@@ -3,7 +3,8 @@ module Main (main) where
 import Cli (CliOptions (..), parseArgs)
 import Control.Concurrent.STM.MonadIO (newTVar)
 import Control.Exception (IOException, finally, try)
-import Control.Monad (forM, void)
+import Control.Monad (forM)
+import Data.IORef (newIORef)
 import qualified Data.Map.Strict as Map
 import Keymap (loadKeyMap)
 import Live (
@@ -20,7 +21,6 @@ import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
-import qualified Termbox2 as Tb2
 import qualified Trellis.Orc as Orc
 import qualified Trellis.UI as UI
 import Update (update)
@@ -72,27 +72,20 @@ run opts = do
           , subscriptions = Map.fromList (fileSubs ++ ins)
           , outBindings = Map.fromList (fileOutLines ++ cliOuts opts)
           }
+  outsRef <- newIORef (fileOutHandles ++ cliOutHandles)
   UI.mount
     id
     setup
     ( UI.activity
-        ( update
-            keymap
-            root
-            mailbox
-            ( fileOutHandles
-                ++ cliOutHandles
-            )
-            (cliFile opts)
-        )
+        (update keymap root mailbox outsRef (cliFile opts))
         (render keymap)
         st0
     )
     `finally` teardown root
  where
   setup = do
-    void (Tb2.setInputMode (Tb2.inputEsc <> Tb2.inputMouse))
-    void (Tb2.setOutputMode sheetOutputMode)
+    UI.setInputMode (UI.inputEsc <> UI.inputMouse)
+    UI.setOutputMode sheetOutputMode
   -- \| 'Orc.close' only forks a killer thread and returns; blocking on
   -- 'Orc.finished' after it is what makes teardown finish before the
   -- process exits, so nothing under 'root' can outlive Trellis.

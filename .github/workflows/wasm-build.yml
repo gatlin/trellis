@@ -1,0 +1,57 @@
+name: wasm-build
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ghc-wasm-meta isn't a ghcup channel pick like windows-build/
+      # macos-build use - it's its own bootstrap script that installs a
+      # full wasm32-wasi GHC + cabal + wasmtime + binaryen + node toolchain
+      # to ~/.ghc-wasm, and ships add_to_github_path.sh specifically so a
+      # later step in this same job can see it (env vars set inside one
+      # run: block don't otherwise persist to the next step in GHA).
+      # setup.sh (which bootstrap.sh wraps) needs curl/jq/unzip/zstd - the
+      # first three are standard on ubuntu-latest, zstd is installed
+      # explicitly below rather than assumed.
+      - name: Install zstd
+        run: sudo apt-get update && sudo apt-get install -y zstd
+
+      - name: Bootstrap ghc-wasm-meta toolchain
+        run: |
+          curl https://gitlab.haskell.org/haskell-wasm/ghc-wasm-meta/-/raw/master/bootstrap.sh | sh
+          sh ~/.ghc-wasm/add_to_github_path.sh
+
+      - name: Build trellis.wasm
+        run: sh wasm/build.sh
+
+      - name: Install wasm/ npm dependencies
+        working-directory: wasm
+        run: npm ci
+
+      - name: Install Playwright's Chromium
+        working-directory: wasm
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e checks
+        working-directory: wasm
+        run: |
+          python3 -m http.server 8935 &
+          server_pid=$!
+          sleep 1
+          node e2e/check.mjs
+          node e2e/live_check.mjs
+          kill "$server_pid"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trellis-wasm
+          path: |
+            wasm/dist/trellis.wasm
+            wasm/dist/trellis.js

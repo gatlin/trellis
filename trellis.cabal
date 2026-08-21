@@ -13,8 +13,17 @@ common warnings
 
 library
     import:           warnings
-    hs-source-dirs:   src
     default-language: Haskell2010
+
+    -- Trellis.UI.Screen is the one part of the library that differs per
+    -- target: termbox2-backed natively, canvas/DOM under wasm (Phase 2 of
+    -- /home/gcj/.claude/plans/prancy-enchanting-star.md - a stub for now)
+    -- - same module name, swapped hs-source-dirs, same trick already used
+    -- for Trellis.Orc below.
+    if os(wasi)
+        hs-source-dirs: src, src-wasi
+    else
+        hs-source-dirs: src, src-native
 
     -- Peano/Lists/Nested/Sheet and CPS/Tubes/UI are vendored verbatim from
     -- an earlier project. Day is pulled from garden's Weeds.hs scratch
@@ -23,6 +32,9 @@ library
     -- source. [^1]
     exposed-modules:
         Trellis.UI,
+        Trellis.UI.Backend,
+        Trellis.UI.Core,
+        Trellis.UI.Screen,
         Trellis.Peano,
         Trellis.Lists,
         Trellis.Nested,
@@ -48,25 +60,56 @@ library
                       free,
                       monadIO,
                       profunctors,
-                      termbox2-hs,
                       text,
                       time,
                       transformers
 
+    if os(wasi)
+        build-depends: ghc-experimental
+    else
+        build-depends: termbox2-hs
+
 executable trellis
     import:           warnings
     main-is:          Main.hs
-    hs-source-dirs:   app
     default-language: Haskell2010
-    ghc-options:      -rtsopts
 
-    -- --gc-sections is a GNU-linker flag; Apple's linker rejects it
-    -- outright and fails the whole link, so Darwin gets its own
-    -- dead-code-stripping flag instead. [^3]
-    if os(osx)
-        ghc-options: -optl-Wl,-dead_strip
+    -- Main/Live.In/Live.Out differ per target the same way the library's
+    -- own Trellis.UI.Screen/Trellis.Orc do - same module names, swapped
+    -- hs-source-dirs. Everything else (SheetState/Render/Update/Formula/
+    -- Parser/Keymap/Cli/SheetFile) stays shared, unconditionally in app/.
+    if os(wasi)
+        hs-source-dirs: app, app-wasi
     else
-        ghc-options: -optl-Wl,--gc-sections
+        hs-source-dirs: app, app-native
+
+    if os(wasi)
+        -- A wasm32-wasi build with any JSFFI at all must link as a
+        -- "reactor" module (a bit like a shared library: internal
+        -- functions plus explicit user-defined entry points, callable
+        -- repeatedly after one init) rather than the default "command"
+        -- module (a single _start, run once, exit) - see
+        -- ~/.ghc-wasm/wasm32-wasi-ghc/doc/html/users_guide/_sources/wasm.rst.txt.
+        -- Every `foreign export javascript` name needs an explicit
+        -- --export= too, or the linker's dead-code elimination drops it.
+        -- init_shim.c's hs_init_ghc() call is required in this mode -
+        -- reactor mode does not auto-call it the way a command module's
+        -- generated main-stub would (see wasm/spike/init_shim.c's own
+        -- note, confirmed empirically getting Phase 0's spike working).
+        ghc-options: -no-hs-main
+                     -optl-mexec-model=reactor
+                     -optl-Wl,--export=trellisSetup,--export=trellisTick
+        c-sources: wasm/init_shim.c
+        build-depends: ghc-experimental
+    else
+        ghc-options: -rtsopts
+        -- --gc-sections is a GNU-linker flag; Apple's linker rejects it
+        -- outright and fails the whole link, so Darwin gets its own
+        -- dead-code-stripping flag instead. [^3]
+        if os(osx)
+            ghc-options: -optl-Wl,-dead_strip
+        else
+            ghc-options: -optl-Wl,--gc-sections
 
     -- SheetState/Render/Update/Formula/Parser/Keymap/Live/Cli are the
     -- spreadsheet app itself, built on the library's reusable machinery
@@ -89,11 +132,16 @@ executable trellis
                       directory,
                       filepath,
                       monadIO,
-                      process,
-                      termbox2-hs,
                       text,
                       time,
                       trellis
+
+    -- process spawns real OS processes for native's Live.In
+    -- (ShellInterval) - meaningless in a browser sandbox, and not
+    -- something wasm32-wasi needs to build at all, since the wasi
+    -- Live.In never imports it.
+    if !os(wasi)
+        build-depends: process
 
 test-suite trellis-test
     import:           warnings
@@ -103,9 +151,13 @@ test-suite trellis-test
 
     -- Reaches into app/ directly since SheetState/Formula/Parser/Update/
     -- Keymap/Live/Cli aren't exposed library modules. Named Spec.hs, not
-    -- Main.hs, to avoid colliding with app/Main.hs on this shared
-    -- source-dir path. [^2]
-    hs-source-dirs:   test, app
+    -- Main.hs, to avoid colliding with app-native/Main.hs on this shared
+    -- source-dir path. [^2] Always native (app-native, not the os(wasi)
+    -- swap the executable/library use) - this component only ever builds
+    -- for the native target, so it needs Live.In/Live.Out's real
+    -- (process-backed) implementation regardless of what os() the rest
+    -- of the project happens to be configuring for.
+    hs-source-dirs:   test, app, app-native
     other-modules:    SheetStateSpec, FormulaSpec, UpdateSpec, LiveSpec, CliSpec,
                       SheetFileSpec, KeymapSpec,
                       SheetState, SheetState.Geometry, SheetState.Fill,
@@ -125,7 +177,6 @@ test-suite trellis-test
                       filepath,
                       monadIO,
                       process,
-                      termbox2-hs,
                       text,
                       time,
                       trellis,

@@ -53,7 +53,6 @@ import SheetState (
   rowBoundariesFrom,
   statusBarHeight,
  )
-import qualified Termbox2 as Tb2
 import qualified Trellis.UI as UI
 
 {- | Layout shared across a frame's render passes, computed once so each
@@ -119,7 +118,7 @@ showing (or its range turned out to have no numeric cells to scale by at
 all - nothing sensible to color by in that case).
 -}
 heatmapColors ::
-  SheetState -> Maybe (Map.Map (Int, Int) (Tb2.Tb2ColorAttr, Tb2.Tb2ColorAttr))
+  SheetState -> Maybe (Map.Map (Int, Int) (UI.Color, UI.Color))
 heatmapColors st = case chart st of
   Just (Chart Heatmap ((x0, y0), (x1, y1))) ->
     let cols = x1 - x0 + 1
@@ -196,7 +195,7 @@ renderCells ::
   Map.Map (Int, Int) FilePath ->
   Maybe ((Int, Int), (Int, Int)) ->
   Maybe ((Int, Int), (Int, Int)) ->
-  Maybe (Map.Map (Int, Int) (Tb2.Tb2ColorAttr, Tb2.Tb2ColorAttr)) ->
+  Maybe (Map.Map (Int, Int) (UI.Color, UI.Color)) ->
   [[Value]] ->
   UI.Screen ()
 renderCells
