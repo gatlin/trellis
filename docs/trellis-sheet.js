@@ -45,9 +45,13 @@ class TrellisSheet extends HTMLElement {
   connectedCallback() {
     if (this._ready) return; // already connected once - see disconnectedCallback
     const shadow = this.attachShadow({ mode: "open" });
+    // Defaults to filling the viewport when the host page doesn't ask
+    // for a specific size - explicit width/height attributes still win,
+    // so existing fixed-size embeddings (e2e tests included, which rely
+    // on deterministic pixel dimensions) are unaffected.
     const canvas = document.createElement("canvas");
-    canvas.width = this.hasAttribute("width") ? Number(this.getAttribute("width")) : 1000;
-    canvas.height = this.hasAttribute("height") ? Number(this.getAttribute("height")) : 600;
+    canvas.width = this.hasAttribute("width") ? Number(this.getAttribute("width")) : window.innerWidth;
+    canvas.height = this.hasAttribute("height") ? Number(this.getAttribute("height")) : window.innerHeight;
     canvas.tabIndex = 0; // focusable - a real keydown only reaches an element that can hold focus
     canvas.style.outline = "none";
     shadow.appendChild(canvas);
