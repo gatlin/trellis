@@ -118,6 +118,61 @@ class TrellisSheet extends HTMLElement {
       hiddenInput.focus();
     });
 
+    // A small fixed toolbar - Arrow/Enter/Esc/Tab/Backspace/F2 - as a
+    // robust, focus-independent way to drive navigation/editing,
+    // particularly useful on mobile where sustained keyboard focus can
+    // be unreliable (see the hidden input's own notes above and in
+    // Screen.hs) - a button tap doesn't depend on holding focus the
+    // way typing does. Each button synthesizes a real KeyboardEvent and
+    // dispatches it on the canvas, exactly as if a physical key had
+    // been pressed - this reuses registerKeydown's existing, already-
+    // tested handling entirely (including the canvas's own
+    // "_activate()" listener, registered above, which - like every
+    // other canvas listener - fires for a dispatched synthetic event
+    // exactly the same as a real one), no new Haskell/FFI code needed.
+    const toolbar = document.createElement("div");
+    toolbar.style.position = "absolute";
+    toolbar.style.top = "0";
+    toolbar.style.left = "0";
+    toolbar.style.right = "0";
+    toolbar.style.display = "flex";
+    toolbar.style.gap = "2px";
+    toolbar.style.padding = "2px";
+    toolbar.style.background = "rgba(0, 0, 0, 0.6)";
+    const TOOLBAR_KEYS = [
+      ["↑", "ArrowUp"],
+      ["↓", "ArrowDown"],
+      ["←", "ArrowLeft"],
+      ["→", "ArrowRight"],
+      ["⏎", "Enter"],
+      ["Esc", "Escape"],
+      ["⇥", "Tab"],
+      ["⌫", "Backspace"],
+      ["F2", "F2"],
+    ];
+    for (const [label, key] of TOOLBAR_KEYS) {
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      btn.type = "button";
+      btn.style.flex = "1";
+      btn.style.font = "12px monospace";
+      btn.style.background = "#333";
+      btn.style.color = "#ccc";
+      btn.style.border = "1px solid #555";
+      btn.style.borderRadius = "3px";
+      btn.style.padding = "4px 0";
+      // preventDefault so tapping a toolbar button doesn't itself steal
+      // focus away from the hidden input mid-edit - a native button
+      // click would otherwise focus the button by default.
+      btn.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        canvas.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+      });
+      toolbar.appendChild(btn);
+    }
+    shadow.appendChild(toolbar);
+    this._toolbar = toolbar;
+
     this._ready = this._instantiate();
   }
 

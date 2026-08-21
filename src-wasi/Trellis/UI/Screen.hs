@@ -209,15 +209,55 @@ foreign import javascript unsafe
 -- browsers - inputType starting with "delete" is filtered out here so
 -- it doesn't *also* get treated as inserted text; the corresponding
 -- Backspace keydown (registerHiddenInputKeydown above) already handles
--- the actual deletion.
+-- the actual deletion. 'prevValue' is still resynced to the (now
+-- shorter) field value in that case, so the next real insertion's diff
+-- (below) starts from the right baseline.
 --
--- Iterates the value with a 'for...of' loop specifically, not a plain
+-- 'el.value' is deliberately *not* cleared after every keystroke
+-- anymore (it was, originally) - repeatedly clearing a focused input's
+-- value mid-typing-session is a well-documented trigger for real mobile
+-- keyboards to glitch, lose autocomplete/predictive-text state, or drop
+-- focus entirely (confirmed in practice, not just in theory - this is
+-- what a user hit). Instead, 'prevValue' tracks the field's own content
+-- as of the last event, and each new 'input' event only extracts
+-- whatever's new: if the field's current value still starts with
+-- 'prevValue' (the overwhelmingly common case for a virtual keyboard -
+-- new characters appended at the end), the appended suffix is exactly
+-- what's new, no reset needed. If it *doesn't* start with 'prevValue' -
+-- some non-append edit happened, which shouldn't occur in ordinary use
+-- since autocomplete\/autocorrect\/spellcheck are already disabled on
+-- this input (see trellis-sheet.js's own note) and there's no visible
+-- cursor on an invisible field to reposition anyway - there's no way to
+-- know which part of the new value is genuinely new without a real
+-- diff, so this fails safe rather than guessing: drops that event's
+-- content and just resyncs 'prevValue' to the field's current state,
+-- rather than risk sending duplicated or out-of-order characters into
+-- the cell. The field is still reset outright, occasionally, once it
+-- grows past 'RESET_THRESHOLD' characters - comfortably more than any
+-- realistic single cell edit needs - purely so it can't grow without
+-- bound over a very long editing session.
+--
+-- The real DOM value otherwise persists across *separate* cell-edit
+-- sessions too (nothing else ever clears it), which 'prevValue' would
+-- otherwise happily keep comparing new sessions against - so a second
+-- keydown listener here (sharing this same closure, hence the same
+-- 'prevValue', unlike registerHiddenInputKeydown's own separate one
+-- above) resets both the field and 'prevValue' on Enter\/F2\/Escape -
+-- every edit-session boundary (starting, confirming, or cancelling an
+-- edit) - so each new session's diff starts from a clean baseline
+-- rather than a previous, unrelated cell's leftover text. Confirmed
+-- empirically to matter, not a defensive guess: without it, typing
+-- into a second cell after a first was already edited compared its
+-- fresh text against the first cell's old content, found no common
+-- prefix, and silently dropped it via the fallback above.
+--
+-- Iterates new text with a 'for...of' loop specifically, not a plain
 -- index/char-code walk - that's what correctly iterates by Unicode code
 -- point rather than UTF-16 code unit, so a character outside the Basic
 -- Multilingual Plane (most emoji, for instance) isn't split into two
 -- calls to $1 as two mismatched surrogate halves.
 foreign import javascript unsafe
-  "(() => { const el = window.trellisHost.hiddenInputEl(); if (!el) return; let composing = false; el.addEventListener('compositionstart', () => { composing = true; }); el.addEventListener('compositionend', () => { composing = false; }); el.addEventListener('input', (e) => { if (composing) return; const text = el.value; el.value = ''; if (e.inputType && e.inputType.indexOf('delete') === 0) return; for (const ch of text) { $1(ch.codePointAt(0)); } if (window.__trellisTick) window.__trellisTick(); }); })()"
+  "(() => { const el = window.trellisHost.hiddenInputEl(); if (!el) return; let composing = false; let prevValue = ''; const RESET_THRESHOLD = 200; el.addEventListener('compositionstart', () => { composing = true; }); el.addEventListener('compositionend', () => { composing = false; }); el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'F2' || e.key === 'Escape') { el.value = ''; prevValue = ''; } }); el.addEventListener('input', (e) => { if (composing) return; const text = el.value; const isDelete = e.inputType && e.inputType.indexOf('delete') === 0; if (isDelete) { prevValue = text; return; } if (text.startsWith(prevValue)) { const newText = text.slice(prevValue.length); for (const ch of newText) { $1(ch.codePointAt(0)); } } prevValue = text; if (text.length > RESET_THRESHOLD) { el.value = ''; prevValue = ''; } if (window.__trellisTick) window.__trellisTick(); }); })()"
   registerHiddenInputText :: JSVal -> IO ()
 
 foreign import javascript unsafe "window.trellisHost.namedKey($1)"
